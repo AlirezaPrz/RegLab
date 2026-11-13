@@ -1,0 +1,118 @@
+/* Design tokens (colour, type, spacing, radii) for light and dark themes. Every other stylesheet uses these. */
+
+/* Math operators (∈ ∉ ≠ ∗ ≥ ≤ ∅ …) from a subset of STIX Two Math, SIL OFL 1.1: see src/assets/fonts/OFL.txt.
+   Renamed because it is a modified (subset) version. */
+@font-face {
+  font-family: "RegLab Math";
+  src: url("../assets/fonts/reglab-math.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2190-21FF, U+2200-22FF, U+03A3, U+03B4, U+03B5, U+03BB, U+03F5;
+}
+:root {
+  color-scheme: light;
+  --paper: #ffffff;
+  --band: #eef2f7;
+  --band-rule: #d3dbe6;
+  --ink: #15171a;
+  --ink-2: #3a4049;
+  --muted: #59626e;
+  --rule: #dde2e8;
+  --rule-strong: #b6bfca;
+  --field: #ffffff;
+  --tok: #eef1f5;
+  --accent: #1b4f9c;
+  --accent-ink: #ffffff;
+  --accent-soft: #e2ebf8;
+  --accent-line: #7fa3d8;
+  --good: #1a6a41;
+  --good-soft: #e3f1e8;
+  --bad: #a3241b;
+  --bad-soft: #fbe8e5;
+  --warn: #7f5200;
+  --warn-soft: #fbf0d9;
+  --state-fill: #ffffff;
+  --edge: #2b3038;
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-math: "STIX Two Text", "RegLab Math", "STIX Two Math", "Cambria Math", "Latin Modern Math", "Times New Roman", serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+
+  --step--1: 0.8125rem;  /* 13 */
+  --step-sm: 0.875rem;   /* 14: tokens, notes, small controls */
+  --step-0: 0.9375rem;   /* 15 */
+  --step-1: 1.0625rem;   /* 17 */
+  --step-2: 1.375rem;    /* 22 */
+  --step-3: clamp(1.5rem, 1rem + 2vw, 2.5rem); /* definition */
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-pill: 999px;
+  /* dialog backdrop, the same in both themes */
+  --scrim: rgb(10 12 16 / 0.6);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Dark values appear twice: once for the system setting (unless the toggle forces light), once for the toggle. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #121418;
+    --band: #191d24;
+    --band-rule: #2a313b;
+    --ink: #e8eaed;
+    --ink-2: #c6cbd2;
+    --muted: #9ba4af;
+    --rule: #2a3039;
+    --rule-strong: #434b57;
+    --field: #0d0f12;
+    --tok: #232831;
+    --accent: #8db8ff;
+    --accent-ink: #0b1626;
+    --accent-soft: #1b2a42;
+    --accent-line: #4f78b8;
+    --good: #72d29b;
+    --good-soft: #142a1e;
+    --bad: #ff8d82;
+    --bad-soft: #351a19;
+    --warn: #f0c46c;
+    --warn-soft: #2c2413;
+    --state-fill: #181b21;
+    --edge: #b9c0ca;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #121418;
+  --band: #191d24;
+  --band-rule: #2a313b;
+  --ink: #e8eaed;
+  --ink-2: #c6cbd2;
+  --muted: #9ba4af;
+  --rule: #2a3039;
+  --rule-strong: #434b57;
+  --field: #0d0f12;
+  --tok: #232831;
+  --accent: #8db8ff;
+  --accent-ink: #0b1626;
+  --accent-soft: #1b2a42;
+  --accent-line: #4f78b8;
+  --good: #72d29b;
+  --good-soft: #142a1e;
+  --bad: #ff8d82;
+  --bad-soft: #351a19;
+  --warn: #f0c46c;
+  --warn-soft: #2c2413;
+  --state-fill: #181b21;
+  --edge: #b9c0ca;
+}
