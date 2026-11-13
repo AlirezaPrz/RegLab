@@ -7,6 +7,7 @@ import { Icon } from "../../ui/Icon.tsx";
 import { LanguagePanel } from "./LanguagePanel.tsx";
 import { AnswerPanel } from "./AnswerPanel.tsx";
 import { FeedbackPanel, conflationClaimNumber } from "./FeedbackPanel.tsx";
+import { HintsPanel, SolutionPanel } from "./HintsPanel.tsx";
 
 const scrollBehavior = (): ScrollBehavior =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
@@ -41,6 +42,7 @@ export function CheckView() {
   const model = answer && answer.kind !== "regex" ? answer.model : null;
   const marked = fb?.conflated?.studentState ?? null;
   const markedTag = fb?.conflated ? `(${conflationClaimNumber(fb)})` : undefined;
+  const langKey = `${state.alphabet}|${state.source}|${state.language}`;
 
   return (
     <>
@@ -63,6 +65,9 @@ export function CheckView() {
         <div className="work-answer">
           <AnswerPanel state={state} derived={derived} dispatch={dispatch} />
         </div>
+        <div className="work-hints">
+          <HintsPanel key={langKey} state={state} hints={derived.hints} dispatch={dispatch} />
+        </div>
         <section className="work-right panel" aria-labelledby="verdict-heading">
           <h2 id="verdict-heading" ref={verdictRef} tabIndex={-1} className="h-section">Verdict</h2>
           <div aria-live="polite" aria-atomic="false">
@@ -81,6 +86,9 @@ export function CheckView() {
             </div>
           )}
         </section>
+        {state.solutionShown && derived.hints && (
+          <div className="work-solution"><SolutionPanel hints={derived.hints} dispatch={dispatch} /></div>
+        )}
       </div>
     </>
   );
