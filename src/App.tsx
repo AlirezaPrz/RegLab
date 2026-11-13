@@ -1,6 +1,7 @@
 /** The app shell: the header, the page router (URL hash) and the light/dark theme. */
 import { useEffect, useState, type ComponentType } from "react";
 import { CheckView } from "./features/check/CheckView.tsx";
+import { HomeView } from "./features/home/HomeView.tsx";
 import { Icon } from "./ui/Icon.tsx";
 
 /**
@@ -9,6 +10,7 @@ import { Icon } from "./ui/Icon.tsx";
  * as a map of the course rather than a list of generic "checkers".
  */
 const VIEWS: { id: string; nav: string; title: string; Component: ComponentType; ownHeading?: boolean; aliases?: string[] }[] = [
+  { id: "", nav: "About", title: "A workbench for the theory of computation", Component: HomeView, ownHeading: true },
   { id: "regular", nav: "Regular languages", title: "Regular languages: check an answer", Component: CheckView, aliases: ["check"] },
 ];
 
