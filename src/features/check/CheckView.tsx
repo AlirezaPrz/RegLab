@@ -1,5 +1,5 @@
 /** The regular-languages tool: the language band, the answer and the verdict, wired to one workbench state. */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkbench } from "../../state/useWorkbench.ts";
 import { Diagram } from "../../diagram/LazyDiagram.tsx";
 import { Definition } from "../../ui/Typeset.tsx";
@@ -7,6 +7,7 @@ import { Icon } from "../../ui/Icon.tsx";
 import { LanguagePanel } from "./LanguagePanel.tsx";
 import { AnswerPanel } from "./AnswerPanel.tsx";
 import { FeedbackPanel, conflationClaimNumber } from "./FeedbackPanel.tsx";
+import { ProbePanel } from "./ProbePanel.tsx";
 import { HintsPanel, SolutionPanel } from "./HintsPanel.tsx";
 
 const scrollBehavior = (): ScrollBehavior =>
@@ -15,6 +16,7 @@ const scrollBehavior = (): ScrollBehavior =>
 /** The tool page; owns the workbench state and passes it down to the panels. */
 export function CheckView() {
   const { state, dispatch, derived } = useWorkbench();
+  const probeRef = useRef<HTMLInputElement>(null);
   const bandRef = useRef<HTMLDivElement>(null);
   const [bandHidden, setBandHidden] = useState(false);
   const verdictRef = useRef<HTMLHeadingElement>(null);
@@ -34,12 +36,18 @@ export function CheckView() {
     return () => io.disconnect();
   }, []);
 
-  const onTry = (w: string) => dispatch({ type: "probe", value: w });
+  const onTry = (w: string) => {
+    dispatch({ type: "probe", value: w });
+    probeRef.current?.closest("section")?.scrollIntoView({ behavior: scrollBehavior(), block: "nearest" });
+  };
 
   const r = derived.result;
   const answer = r && r.ok ? r.answer : null;
   const fb = r && r.ok ? r.feedback : null;
   const model = answer && answer.kind !== "regex" ? answer.model : null;
+  const steps = derived.probe?.path ?? null;
+  const stepIdx = derived.activeStep;
+  const active = useMemo(() => (steps && stepIdx !== null ? new Set(steps[stepIdx].states) : undefined), [steps, stepIdx]);
   const marked = fb?.conflated?.studentState ?? null;
   const markedTag = fb?.conflated ? `(${conflationClaimNumber(fb)})` : undefined;
   const langKey = `${state.alphabet}|${state.source}|${state.language}`;
@@ -79,12 +87,16 @@ export function CheckView() {
               <Diagram
                 model={model}
                 title={`Your ${answer!.kind.toUpperCase()}`}
+                active={derived.stale ? undefined : active}
+                stuck={!derived.stale && !!active && active.size === 0}
                 marked={derived.stale ? null : marked}
                 markedTag={markedTag}
                 dimmed={derived.stale}
               />
             </div>
           )}
+          <ProbePanel ref={probeRef} state={state} probe={derived.probe} activeStep={stepIdx} model={derived.stale ? null : model}
+            kind={answer && !derived.stale ? answer.kind : null} dispatch={dispatch} />
         </section>
         {state.solutionShown && derived.hints && (
           <div className="work-solution"><SolutionPanel hints={derived.hints} dispatch={dispatch} /></div>
