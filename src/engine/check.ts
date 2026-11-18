@@ -5,7 +5,7 @@
  */
 import {
   type DFA, type NFA, type ParsedAutomaton, type Remember,
-  EPS, regexToDfa, regexToNfa, parseRegex, parseSpec, explainSpec, parseAutomaton, nfaToDfa, compare, minimize,
+  EPS, regexToDfa, regexToNfa, parseRegex, parseSpec, explainSpec, parseAutomaton, readAutomatonLines, nfaToDfa, compare, minimize,
   dfaToRegex, nfaToRegex, accepts, trace, accessStrings, sampleStrings, parseAlphabet, EngineError,
 } from "./engine.ts";
 
@@ -394,6 +394,53 @@ export function automatonText(m: AutomatonModel): string {
     `accept: ${m.names.filter((_, i) => m.accept[i] && used.has(i)).join(" ")}`,
     ...m.edges.map((e) => `${m.names[e.from]} ${e.symbols.join(",")} ${m.names[e.to]}`),
   ].join("\n");
+}
+
+
+/** An automaton as far as it has been written, drawn while the student types. */
+export interface Draft {
+  /** null until there is a start line */
+  model: AutomatonModel | null;
+  /** "nfa" once it has an ε-move or two moves on one symbol from one state */
+  kind: "dfa" | "nfa";
+  /** lines that can't be read yet, left out of the drawing (1-based) */
+  skipped: number[];
+}
+
+/**
+ * Reads an automaton the forgiving way: lines that can't be read yet are skipped, and states named
+ * only on the accept line are drawn too. When the text is complete, the states are numbered as
+ * parseAutomaton numbers them, so the drawing matches the checked answer.
+ */
+export function draftAutomaton(src: string, alphabet: readonly string[]): Draft {
+  let start: string | null = null;
+  const accept = new Set<string>(), moves: { from: string; sym: string; to: string }[] = [], skipped: number[] = [];
+  for (const { line, read } of readAutomatonLines(src, alphabet)) {
+    if (read.t === "error") skipped.push(line);
+    else if (read.t === "start") start = read.name;
+    else if (read.t === "accept") read.names.forEach((a) => accept.add(a));
+    else for (const sym of read.symbols) moves.push({ from: read.from, sym, to: read.to });
+  }
+  if (start === null) return { model: null, kind: "dfa", skipped };
+  const names: string[] = [], index = new Map<string, number>();
+  const id = (name: string) => { if (!index.has(name)) { index.set(name, names.length); names.push(name); } return index.get(name)!; };
+  id(start);
+  for (const m of moves) { id(m.from); id(m.to); }
+  for (const a of accept) id(a);
+  const edges = moves.map((m) => ({ from: id(m.from), to: id(m.to), sym: m.sym }));
+  const target = new Map<string, number>();
+  const nfa = edges.some((e) => {
+    if (e.sym === EPS) return true;
+    const k = e.from + " " + e.sym;
+    if (target.has(k) && target.get(k) !== e.to) return true;
+    target.set(k, e.to);
+    return false;
+  });
+  return {
+    model: { names, start: 0, accept: names.map((n) => accept.has(n)), edges: mergeEdges(edges) },
+    kind: nfa ? "nfa" : "dfa",
+    skipped,
+  };
 }
 
 

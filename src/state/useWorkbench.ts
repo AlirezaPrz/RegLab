@@ -3,10 +3,10 @@
  * A reducer holds only what the student typed or chose; everything else is derived from the
  * engine, memoized on the inputs it depends on.
  */
-import { useMemo, useReducer } from "react";
+import { useDeferredValue, useMemo, useReducer } from "react";
 import {
-  readLanguage, readAnswer, checkAnswer, probe, samples, hints, toInputError,
-  type Language, type AnswerSource, type Answer, type Feedback, type InputError, type Hints, type Probe,
+  readLanguage, readAnswer, checkAnswer, probe, samples, hints, draftAutomaton, toInputError,
+  type Language, type AnswerSource, type Answer, type Feedback, type InputError, type Hints, type Probe, type Draft,
 } from "../engine/index.ts";
 import { EXAMPLES } from "./examples.ts";
 
@@ -37,6 +37,9 @@ export interface WorkbenchState {
 
 export type HintStep = 0 | 1 | 2 | 3 | 4;
 
+/** What the automaton editor starts with: the two lines every automaton needs. */
+export const AUTOMATON_START = "start: q0\naccept: \n";
+
 /** Every change the UI can make. Editing the language clears the check, hints and solution. */
 export type Action =
   | { type: "example"; value: number }
@@ -53,7 +56,7 @@ export type Action =
 const first = EXAMPLES[0];
 export const initialState: WorkbenchState = {
   example: 0, lastExample: 0, alphabet: first.alphabet, language: first.text,
-  answerSource: "regex", regex: "", automaton: "", probe: "",
+  answerSource: "regex", regex: "", automaton: AUTOMATON_START, probe: "",
   checked: null, hintsOpened: 0, hintShown: 0, step: null,
 };
 
@@ -113,6 +116,8 @@ export interface Derived {
   probe: Probe | null;
   /** the highlighted step of the probe path: the one the student picked, else the last */
   activeStep: number | null;
+  /** the automaton answer as far as it has been written, for the drawing beside the editor */
+  draft: Draft | null;
 }
 
 /** The tool's state, a dispatch function, and everything derived from them. */
@@ -148,11 +153,19 @@ export function useWorkbench() {
     return probe(state.probe, lang.language, answer);
   }, [state.probe, lang.language, result, stale]);
 
+  // typing runs ahead of drawing, so a long automaton never slows the editor down
+  const automatonText = useDeferredValue(state.automaton);
+  const draft = useMemo(
+    () => (lang.language && state.answerSource === "automaton" ? draftAutomaton(automatonText, lang.language.alphabet) : null),
+    [lang.language, state.answerSource, automatonText],
+  );
+
   const path = probeResult?.path;
   const derived: Derived = {
     language: lang.language, languageError: lang.error,
     samples: sampleList, hints: hintData, result, stale, probe: probeResult,
     activeStep: state.step ?? (path ? path.length - 1 : null),
+    draft,
   };
   return { state, dispatch, derived };
 }

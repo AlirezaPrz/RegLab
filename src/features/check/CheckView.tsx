@@ -49,6 +49,13 @@ export function CheckView() {
   const stepIdx = derived.activeStep;
   const active = useMemo(() => (steps && stepIdx !== null ? new Set(steps[stepIdx].states) : undefined), [steps, stepIdx]);
   const marked = fb?.conflated?.studentState ?? null;
+  // the drawing beside the editor: the checked answer while it is current, so marks and traces line
+  // up with it; otherwise the automaton as far as it has been written
+  const draft = derived.draft;
+  const drawing = model && !derived.stale
+    ? { model, title: `Your ${answer!.kind.toUpperCase()}`, checked: true }
+    : draft?.model ? { model: draft.model, title: `Your ${draft.kind.toUpperCase()} so far`, checked: false } : null;
+  const skipped = !drawing?.checked && draft ? draft.skipped : [];
   const markedTag = fb?.conflated ? `(${conflationClaimNumber(fb)})` : undefined;
 
   return (
@@ -77,20 +84,23 @@ export function CheckView() {
           <div aria-live="polite" aria-atomic="false">
             <FeedbackPanel derived={derived} onTry={onTry} />
           </div>
-          {model && (
+          {drawing && (
             <div className="answer-diagram">
-              <h3 className="h-sub">Your {answer!.kind.toUpperCase()}</h3>
+              <h3 className="h-sub">{drawing.title}</h3>
               <Diagram
-                model={model}
-                title={`Your ${answer!.kind.toUpperCase()}`}
-                active={derived.stale ? undefined : active}
-                stuck={!derived.stale && !!active && active.size === 0}
-                marked={derived.stale ? null : marked}
+                model={drawing.model}
+                title={drawing.title}
+                active={drawing.checked ? active : undefined}
+                stuck={drawing.checked && !!active && active.size === 0}
+                marked={drawing.checked ? marked : null}
                 markedTag={markedTag}
-                dimmed={derived.stale}
               />
+              {skipped.length > 0 && (
+                <p className="help">Not drawn yet: {skipped.length === 1 ? "line" : "lines"} {skipped.join(", ")} can't be read.</p>
+              )}
             </div>
           )}
+          {!drawing && draft && <p className="help answer-diagram">Add a <code>start:</code> line to see a drawing of your automaton.</p>}
           <ProbePanel ref={probeRef} state={state} probe={derived.probe} activeStep={stepIdx} model={derived.stale ? null : model}
             kind={answer && !derived.stale ? answer.kind : null} dispatch={dispatch} />
         </section>

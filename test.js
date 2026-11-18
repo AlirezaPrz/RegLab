@@ -258,6 +258,20 @@ test("hints: what to remember, the states with their meaning, then the smallest 
   // the dead state comes last, named as such
   assert.deepStrictEqual(R.hints(lang("#_a(w) = 1")).states.map((s) => [s.name, s.sink]), [["q0", null], ["q1", null], ["dead", "dead"]]);
 });
+test("draft: draws what can be read so far, numbered like the checked answer", () => {
+  const d = R.draftAutomaton("start: q0\naccept: q2\nq0 a q1\nq1 b\nq9", ab);
+  assert.deepStrictEqual(d.model.names, ["q0", "q1", "q2"]);
+  assert.deepStrictEqual(d.model.accept, [false, false, true]);
+  assert.deepStrictEqual(d.skipped, [4, 5]);
+  assert.strictEqual(d.kind, "dfa");
+  assert.strictEqual(R.draftAutomaton("start: q0\nq0 a q1\nq0 a q2", ab).kind, "nfa");
+  assert.strictEqual(R.draftAutomaton("accept: q1\nq0 a q1", ab).model, null);
+  // the template the answer editor starts with is one state, nothing accepted yet
+  assert.deepStrictEqual(R.draftAutomaton("start: q0\naccept: \n", ab).model.names, ["q0"]);
+  const text = "start: s\naccept: f\ns a,b s\ns a x\nx a,b y\ny a,b f";
+  const answer = R.readAnswer("automaton", text, ab);
+  assert.deepStrictEqual(R.draftAutomaton(text, ab).model, answer.model);
+});
 test("errors: readLanguage and readAnswer say which field", () => {
   assert.throws(() => lang("ends in aa", "a ("), (e) => e.field === "alphabet");
   assert.throws(() => lang("ends in zz"), (e) => e.field === "language");
