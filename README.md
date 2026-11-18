@@ -29,14 +29,16 @@ npm run preview    # serve dist/ locally
 src/
   engine/       all automata logic, no DOM, no dependencies
     engine.ts     regex/description/automaton parsing, regex to NFA, subset construction, minimisation,
-                  comparison, state elimination (automaton to regex)
+                  comparison, state elimination (automaton to regex), and explainSpec: the DFA a
+                  description defines, built from what it tracks, with what each state means
     check.ts      what the UI shows, as plain data: readLanguage, readAnswer, checkAnswer, probe, hints,
-                  and for the converter convertRegex, convertAutomaton, automatonText
+                  draftAutomaton (the drawing while typing), and for the converter convertRegex,
+                  convertAutomaton, automatonText
   state/        useWorkbench: the study session (language → answer → feedback → probe)
   features/
     home/       the landing page (#/): what RegLab is, the tools, a scroll walkthrough of the
                 regular-languages tool (HowItWorks), and the BIG RESULT
-    check/      the regular-languages tool (#/regular; #/check still works)
+    check/      the regular-languages tool (#/regular; #/check still works); StuckSection is the hints
     convert/    the regex ⇄ automata converter (#/convert)
   diagram/      dagre layout (layout.ts) and the SVG / table renderer
   ui/           small shared pieces: symbol keys, the automaton editor, field errors, typeset notation, icons
@@ -49,7 +51,9 @@ Rules worth keeping:
 
 - **The engine is the only place that knows about automata.** Components render what `check.ts` returns. If the UI needs a new fact, add a function to `check.ts` and a test to `test.js`.
 - **Errors carry their location.** `EngineError` has `from`/`to` (character range in the typed text) or `line` (automata). `FieldError` shows them under the input.
-- **The solution is gated.** Hints open one step at a time; the full solution needs a second, confirmed action and closes whenever the language changes (`languageChanged` in `useWorkbench.ts`).
+- **The solution is gated.** The hints open one step at a time (what to remember, the states, the DFA, the smallest DFA); the DFA, which is the full solution, needs a confirmed action, and everything closes whenever the language changes (`languageChanged` in `useWorkbench.ts`).
+- **State descriptions are checked, not trusted.** `explainSpec` describes each state in the description syntax, so `test.js` parses every description back and checks it is exactly the set of strings that reach that state. Keep new trackers to that rule.
+- **Each description form is written one way.** Retired forms (`contains`, `is even`, `divisible by`, `begins with`, `ends with`, `length`) are rejected with an error that names the form to use; add a `retired(...)` line in `parseDescription` rather than a synonym.
 
 ## Adding the planned features
 
