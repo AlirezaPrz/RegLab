@@ -27,13 +27,15 @@ export interface WorkbenchState {
   probe: string;
   /** what was submitted with "Check"; feedback is about this, not the live text */
   checked: { source: AnswerSource; text: string } | null;
-  /** hint level the student opened: 0 none, 1 state count, 2 + one string per state */
-  hintLevel: 0 | 1 | 2;
-  /** solution shown; reset whenever the language changes */
-  solutionShown: boolean;
+  /** hint steps opened, in order: 1 what to remember, 2 the states, 3 the DFA (the solution), 4 the smallest DFA */
+  hintsOpened: HintStep;
+  /** the step on screen (0: none yet). It can be one past hintsOpened while the solution asks to be confirmed. */
+  hintShown: HintStep;
   /** the step of the probe path that is highlighted (null: the last) */
   step: number | null;
 }
+
+export type HintStep = 0 | 1 | 2 | 3 | 4;
 
 /** Every change the UI can make. Editing the language clears the check, hints and solution. */
 export type Action =
@@ -43,19 +45,20 @@ export type Action =
   | { type: "alphabet" | "language" | "regex" | "automaton" | "probe"; value: string }
   | { type: "answerSource"; value: AnswerSource }
   | { type: "check" }
-  | { type: "hint"; level: 0 | 1 | 2 }
-  | { type: "solution"; shown: boolean }
+  | { type: "showHint"; step: 1 | 2 | 3 | 4 }
+  | { type: "confirmSolution" }
+  | { type: "hideSolution" }
   | { type: "step"; value: number | null };
 
 const first = EXAMPLES[0];
 export const initialState: WorkbenchState = {
   example: 0, lastExample: 0, alphabet: first.alphabet, language: first.text,
   answerSource: "regex", regex: "", automaton: "", probe: "",
-  checked: null, hintLevel: 0, solutionShown: false, step: null,
+  checked: null, hintsOpened: 0, hintShown: 0, step: null,
 };
 
 /** A new language: the old check, hints and solution no longer apply. */
-const languageChanged = (s: WorkbenchState): WorkbenchState => ({ ...s, checked: null, hintLevel: 0, solutionShown: false, step: null });
+const languageChanged = (s: WorkbenchState): WorkbenchState => ({ ...s, checked: null, hintsOpened: 0, hintShown: 0, step: null });
 
 function reducer(s: WorkbenchState, a: Action): WorkbenchState {
   switch (a.type) {
@@ -79,8 +82,17 @@ function reducer(s: WorkbenchState, a: Action): WorkbenchState {
       const text = s.answerSource === "regex" ? s.regex : s.automaton;
       return { ...s, checked: { source: s.answerSource, text }, step: null };
     }
-    case "hint": return { ...s, hintLevel: a.level };
-    case "solution": return { ...s, solutionShown: a.shown };
+    case "showHint": {
+      // opened steps can be revisited; the next one opens, except the solution, which asks first
+      if (a.step <= s.hintsOpened) return { ...s, hintShown: a.step };
+      if (a.step !== s.hintsOpened + 1) return s;
+      return a.step === 3 ? { ...s, hintShown: 3 } : { ...s, hintsOpened: a.step, hintShown: a.step };
+    }
+    case "confirmSolution": return s.hintsOpened === 2 ? { ...s, hintsOpened: 3, hintShown: 3 } : s;
+    case "hideSolution": {
+      const opened = Math.min(s.hintsOpened, 2) as HintStep;
+      return { ...s, hintsOpened: opened, hintShown: Math.min(s.hintShown, opened) as HintStep };
+    }
     case "step": return { ...s, step: a.value };
   }
 }

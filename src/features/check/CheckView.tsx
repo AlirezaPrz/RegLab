@@ -1,4 +1,4 @@
-/** The regular-languages tool: the language band, the answer and the verdict, wired to one workbench state. */
+/** The regular-languages tool: the language band, the answer beside the verdict, and the hints below, wired to one workbench state. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkbench } from "../../state/useWorkbench.ts";
 import { Diagram } from "../../diagram/LazyDiagram.tsx";
@@ -8,7 +8,7 @@ import { LanguagePanel } from "./LanguagePanel.tsx";
 import { AnswerPanel } from "./AnswerPanel.tsx";
 import { FeedbackPanel, conflationClaimNumber } from "./FeedbackPanel.tsx";
 import { ProbePanel } from "./ProbePanel.tsx";
-import { HintsPanel, SolutionPanel } from "./HintsPanel.tsx";
+import { StuckSection } from "./StuckSection.tsx";
 
 const scrollBehavior = (): ScrollBehavior =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
@@ -50,7 +50,6 @@ export function CheckView() {
   const active = useMemo(() => (steps && stepIdx !== null ? new Set(steps[stepIdx].states) : undefined), [steps, stepIdx]);
   const marked = fb?.conflated?.studentState ?? null;
   const markedTag = fb?.conflated ? `(${conflationClaimNumber(fb)})` : undefined;
-  const langKey = `${state.alphabet}|${state.language}`;
 
   return (
     <>
@@ -72,9 +71,6 @@ export function CheckView() {
       <div className="work">
         <div className="work-answer">
           <AnswerPanel state={state} derived={derived} dispatch={dispatch} />
-        </div>
-        <div className="work-hints">
-          <HintsPanel key={langKey} state={state} hints={derived.hints} dispatch={dispatch} />
         </div>
         <section className="work-right panel" aria-labelledby="verdict-heading">
           <h2 id="verdict-heading" ref={verdictRef} tabIndex={-1} className="h-section">Verdict</h2>
@@ -98,10 +94,9 @@ export function CheckView() {
           <ProbePanel ref={probeRef} state={state} probe={derived.probe} activeStep={stepIdx} model={derived.stale ? null : model}
             kind={answer && !derived.stale ? answer.kind : null} dispatch={dispatch} />
         </section>
-        {state.solutionShown && derived.hints && (
-          <div className="work-solution"><SolutionPanel hints={derived.hints} dispatch={dispatch} /></div>
-        )}
       </div>
+
+      <StuckSection state={state} hints={derived.hints} dispatch={dispatch} />
     </>
   );
 }

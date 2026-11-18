@@ -33,7 +33,7 @@ function ToolTile({ name, what, href, formula, model, title }: {
 /** The landing page. */
 export function HomeView() {
   // real engine output for the tiles: the smallest DFA for a description, and an NFA as written
-  const dfa = useMemo(() => hints(readLanguage("a b", "ends in aa")).solution, []);
+  const dfa = useMemo(() => hints(readLanguage("a b", "ends in aa")).dfa, []);
   const nfa = useMemo(() => convertAutomaton("a b", TILE_NFA).model, []);
 
   return (

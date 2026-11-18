@@ -243,11 +243,20 @@ test("feedback: NFA note and probe path", () => {
   assert.deepStrictEqual(p.path.map((s) => s.states.map((i) => ans.model.names[i]).join(",")), ["s", "s,x", "s,y", "s,x,f", "s,y"]);
   assert.strictEqual(R.probe("abc", L, ans).foreign, "c");
 });
-test("feedback: hints match the minimal DFA", () => {
-  const h = R.hints(lang("ends in aa"));
-  assert.strictEqual(h.minStates, 3);
-  assert.strictEqual(h.solution.names.length, 3);
-  assert.deepStrictEqual(h.solution.edges.find((e) => e.from === 2 && e.to === 2).symbols, ["a"]);
+test("hints: what to remember, the states with their meaning, then the smallest DFA", () => {
+  const h = R.hints(lang("|w| > 2 and ends in b"));
+  assert.deepStrictEqual(h.remember.map((r) => r.what), ["|w|", null]);
+  assert.strictEqual(h.dfa.names.length, 7);
+  assert.deepStrictEqual(h.states.slice(0, 2).map((s) => [s.name, s.says, s.example, s.start]), [
+    ["q0", "|w| = 0", "", true], ["q1", "|w| = 1 and not ends in b", "a", false],
+  ]);
+  assert(h.states.at(-1).accepting && h.states.at(-1).says === "|w| >= 3 and ends in b");
+  // the smallest DFA merges the states that no string tells apart
+  assert.strictEqual(h.smallest.names.length, 4);
+  assert.deepStrictEqual(h.merged.map((m) => m.join(" ")), ["q0", "q1 q2", "q3 q4 q5", "q6"]);
+  assert(same(rx(h.regex), spec("|w| > 2 and ends in b")));
+  // the dead state comes last, named as such
+  assert.deepStrictEqual(R.hints(lang("#_a(w) = 1")).states.map((s) => [s.name, s.sink]), [["q0", null], ["q1", null], ["dead", "dead"]]);
 });
 test("errors: readLanguage and readAnswer say which field", () => {
   assert.throws(() => lang("ends in aa", "a ("), (e) => e.field === "alphabet");

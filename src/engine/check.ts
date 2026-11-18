@@ -4,9 +4,9 @@
  * only render these results; no automata logic lives in them.
  */
 import {
-  type DFA, type NFA, type ParsedAutomaton,
-  EPS, regexToDfa, regexToNfa, parseRegex, parseSpec, parseAutomaton, nfaToDfa, compare, minimize, dfaToRegex, nfaToRegex,
-  accepts, trace, sampleStrings, nerodeClasses, parseAlphabet, EngineError,
+  type DFA, type NFA, type ParsedAutomaton, type Remember,
+  EPS, regexToDfa, regexToNfa, parseRegex, parseSpec, explainSpec, parseAutomaton, nfaToDfa, compare, minimize,
+  dfaToRegex, nfaToRegex, accepts, trace, accessStrings, sampleStrings, parseAlphabet, EngineError,
 } from "./engine.ts";
 
 
@@ -35,23 +35,59 @@ export function samples(lang: Language, limit = 7): { yes: string[]; no: string[
   return { yes: sampleStrings(lang.dfa, true, limit), no: sampleStrings(lang.dfa, false, limit) };
 }
 
-/** Progressive hints, ending with the full solution. */
+/** A state of the DFA in the hints, with what it means. */
+export interface StateNote {
+  name: string;
+  /**
+   * What is true of w exactly when the DFA is in this state after reading w, in description
+   * notation. null for a merged state with no short description (dead: no extension of w is in L;
+   * all: every extension is).
+   */
+  says: string | null;
+  sink: "dead" | "all" | null;
+  start: boolean;
+  accepting: boolean;
+  /** a shortest string that leads to it */
+  example: string;
+}
+
+/**
+ * The hints, in the order they open: what a DFA for the language has to remember; its states and
+ * what each means; the DFA itself with a regular expression (the full solution); and the smallest
+ * DFA, with the states it merges.
+ */
 export interface Hints {
-  /** states in the minimal DFA */
-  minStates: number;
-  /** one shortest string reaching each state of the minimal DFA */
-  classes: { rep: string; accepting: boolean }[];
-  /** the minimal DFA itself: the full solution */
-  solution: AutomatonModel;
+  remember: Remember[];
+  /** the DFA built from what the description keeps track of (see explainSpec) */
+  dfa: AutomatonModel;
+  states: StateNote[];
+  /** the smallest DFA, states p0, p1, …; merged[i] lists the states of `dfa` that p_i stands for */
+  smallest: AutomatonModel;
+  merged: string[][];
   /** a regular expression for the language, built from the DFA by state elimination */
   regex: string;
 }
 
-/** Hints for a language. */
+/** The hints for a language. */
 export function hints(lang: Language): Hints {
-  const classes = nerodeClasses(lang.dfa);
-  const min = minimize(lang.dfa).dfa;
-  return { minStates: classes.length, classes, solution: modelFromDfa(min), regex: dfaToRegex(lang.dfa) };
+  const ex = explainSpec(lang.text, lang.alphabet);
+  const { dfa: min, classOf } = minimize(ex.dfa);
+  const examples = accessStrings(ex.dfa);
+  return {
+    remember: ex.remember,
+    dfa: modelFromDfa(ex.dfa, ex.names),
+    states: ex.names.map((name, s) => ({
+      name, says: ex.says[s], sink: ex.sink[s], start: s === ex.dfa.start, accepting: ex.dfa.accept[s], example: examples[s] ?? "",
+    })),
+    smallest: modelFromDfa(min, min.accept.map((_, i) => "p" + i)),
+    merged: mergedNames(min.n, classOf, ex.names),
+    regex: dfaToRegex(lang.dfa),
+  };
+}
+
+/** For each state of a minimal DFA, the names of the states it merges (classOf maps old states to new ones). */
+function mergedNames(n: number, classOf: number[], names: string[]): string[][] {
+  return Array.from({ length: n }, (_, i) => names.filter((_, s) => classOf[s] === i));
 }
 
 
