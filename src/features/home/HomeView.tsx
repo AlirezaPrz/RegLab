@@ -1,26 +1,40 @@
-/** The landing page: what RegLab is, the tools (available and planned), and the BIG RESULT. */
-import { useMemo } from "react";
-import { hints, readLanguage } from "../../engine/index.ts";
+/** The landing page: what RegLab is, its tools, how the regular-languages tool works, and the BIG RESULT. */
+import { useMemo, type ReactNode } from "react";
+import { convertAutomaton, hints, readLanguage, type AutomatonModel } from "../../engine/index.ts";
 import { Diagram } from "../../diagram/LazyDiagram.tsx";
+import { Definition, TypesetRegex } from "../../ui/Typeset.tsx";
 import { HowItWorks } from "./HowItWorks.tsx";
 import "./home.css";
 
+// an NFA for (a+b)*ab, drawn in the converter's tile
+const TILE_NFA = "start: q0\naccept: q2\nq0 a,b q0\nq0 a q1\nq1 b q2";
 
-/** The tools, in the order the course meets them. `href` only for tools that exist. */
-const TOOLS: { name: string; what: string; href?: string }[] = [
-  { name: "Regular languages", what: "Check a regular expression, DFA or NFA against a language. See the shortest string it gets wrong, which strings it confuses, and hints that stop short of the answer.", href: "#/regular" },
-  { name: "NFA to DFA, step by step", what: "Watch the subset construction build each state, then try the next step yourself." },
-  { name: "Context-free grammars", what: "Test a grammar on strings and see their derivations and parse trees." },
-  { name: "Pushdown automata", what: "Write a PDA as transitions and trace a string through its stack." },
-  { name: "Pumping lemmas", what: "Play the pumping-lemma game: pick the split, and see why it fails." },
-  { name: "Practice problems", what: "New languages to describe, checked the moment you answer." },
-];
+/** One tool: its name, what it does, and a small engine-drawn example of what it works with. */
+function ToolTile({ name, what, href, formula, model, title }: {
+  name: string; what: string; href: string; formula: ReactNode; model: AutomatonModel; title: string;
+}) {
+  return (
+    <li className="tool-tile">
+      <a href={href} className="tool-link">
+        <span className="tool-text">
+          <span className="tool-name">{name}</span>
+          <span className="tool-what">{what}</span>
+          <span className="tool-open">Open <span aria-hidden="true">→</span></span>
+        </span>
+        <span className="tool-figure">
+          <span className="tool-formula">{formula}</span>
+          <Diagram model={model} title={title} bare />
+        </span>
+      </a>
+    </li>
+  );
+}
 
 /** The landing page. */
 export function HomeView() {
-  // a real minimal DFA from the engine, drawn in the regular-languages tile
-  const preview = useMemo(() => hints(readLanguage("a b", "ends in aa")).solution, []);
-  const [live, ...planned] = TOOLS;
+  // real engine output for the tiles: the smallest DFA for a description, and an NFA as written
+  const dfa = useMemo(() => hints(readLanguage("a b", "ends in aa")).solution, []);
+  const nfa = useMemo(() => convertAutomaton("a b", TILE_NFA).model, []);
 
   return (
     <div className="home">
@@ -30,31 +44,20 @@ export function HomeView() {
           Write an answer and RegLab tells you whether it is right. When it is not, you get the exact string where it breaks
           and why. No account and no setup.
         </p>
-        <a className="home-cta" href={live.href}>Open {live.name.toLowerCase()}</a>
+        <a className="home-cta" href="#/regular">Open regular languages</a>
       </section>
 
       <section className="home-tools" aria-labelledby="tools-h">
         <h2 id="tools-h" className="home-h2">Tools</h2>
         <ul className="tools">
-          <li className="tool-live">
-            <a href={live.href} className="tool-live-link">
-              <span className="tool-live-text">
-                <span className="tool-name">{live.name}</span>
-                <span className="tool-what">{live.what}</span>
-                <span className="tool-open">Open the tool <span aria-hidden="true">→</span></span>
-              </span>
-              <span className="tool-live-figure">
-                <Diagram model={preview} title="Example: the smallest DFA for strings ending in aa" bare />
-              </span>
-            </a>
-          </li>
-          {planned.map((t) => (
-            <li key={t.name} className="tool-planned">
-              <span className="tool-name">{t.name}</span>
-              <span className="tool-what">{t.what}</span>
-              <span className="tool-status">Planned</span>
-            </li>
-          ))}
+          <ToolTile name="Regular languages" href="#/regular"
+            what="Describe a language and answer with a regular expression, DFA or NFA. See the shortest string your answer gets wrong, which strings it confuses, and hints that stop short of the answer."
+            formula={<Definition alphabet={["a", "b"]} text="ends in aa" />}
+            model={dfa} title="Example: the smallest DFA for strings ending in aa" />
+          <ToolTile name="Regex ⇄ automata" href="#/convert"
+            what="Turn a regular expression into an NFA, the DFA the subset construction makes from it, and the smallest DFA. Or turn a DFA or NFA into a regular expression."
+            formula={<span className="math"><i>R</i> <span className="m-op">=</span> <TypesetRegex text="(a+b)*ab" /></span>}
+            model={nfa} title="Example: an NFA for (a+b)*ab" />
         </ul>
       </section>
 
@@ -62,7 +65,6 @@ export function HomeView() {
 
       <section className="home-result" aria-labelledby="result-h">
         <div className="result-inner">
-        <div className="result-body">
           <h2 id="result-h" className="result-h">The BIG RESULT</h2>
           <div className="theorem math">
             <p><strong>Theorem.</strong> Let <i>L</i> be a language. Then the following are equivalent:</p>
@@ -73,10 +75,10 @@ export function HomeView() {
             </ol>
           </div>
           <p className="result-note">
-            The regular-languages tool is built on it: every regular expression and NFA you enter becomes a DFA, and two DFAs can
-            always be compared exactly.
+            Both tools are built on it. The regular-languages tool turns every answer into a DFA, so any two answers can be
+            compared exactly. <a href="#/convert">Regex ⇄ automata</a> runs the constructions from its proof: regex to NFA, NFA to DFA,
+            and back to a regex.
           </p>
-        </div>
         </div>
       </section>
 
