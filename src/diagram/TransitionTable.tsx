@@ -1,7 +1,8 @@
 /** The table view of an automaton, the accessible alternative to the diagram. */
 import type { AutomatonModel } from "../engine/index.ts";
+import { StateMark } from "../ui/StateMark.tsx";
 
-/** Rows are states (→ marks the start, ✱ the accepting states), columns are symbols with ε last. */
+/** Rows are states (marked as start or accepting the way the diagram draws them), columns are symbols with ε last. */
 export function TransitionTable({ model, caption, active }: { model: AutomatonModel; caption: string; active?: ReadonlySet<number> }) {
   const symbols: string[] = [];
   for (const e of model.edges) for (const s of e.symbols) if (!symbols.includes(s)) symbols.push(s);
@@ -18,8 +19,8 @@ export function TransitionTable({ model, caption, active }: { model: AutomatonMo
         {model.names.map((name, i) => (
           <tr key={i} className={active?.has(i) ? "is-active" : undefined}>
             <th scope="row" className="mono">
-              {i === model.start && <span className="tt-mark" aria-label="start">→</span>}
-              {model.accept[i] && <span className="tt-mark" aria-label="accepting">✱</span>}
+              {i === model.start && <StateMark kind="start" />}
+              {model.accept[i] && <StateMark kind="accepting" />}
               {name}
             </th>
             {symbols.map((s) => <td key={s} className="mono">{cell(i, s) || <span className="tt-none" aria-label="no move">·</span>}</td>)}

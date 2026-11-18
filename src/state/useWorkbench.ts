@@ -27,10 +27,8 @@ export interface WorkbenchState {
   probe: string;
   /** what was submitted with "Check"; feedback is about this, not the live text */
   checked: { source: AnswerSource; text: string } | null;
-  /** hint steps opened, in order: 1 what to remember, 2 the states, 3 the DFA (the solution), 4 the smallest DFA */
+  /** hints opened, in order: 1 what to remember, 2 what each state means, 3 the full solution, 4 the smallest DFA */
   hintsOpened: HintStep;
-  /** the step on screen (0: none yet). It can be one past hintsOpened while the solution asks to be confirmed. */
-  hintShown: HintStep;
   /** the step of the probe path that is highlighted (null: the last) */
   step: number | null;
 }
@@ -48,8 +46,7 @@ export type Action =
   | { type: "alphabet" | "language" | "regex" | "automaton" | "probe"; value: string }
   | { type: "answerSource"; value: AnswerSource }
   | { type: "check" }
-  | { type: "showHint"; step: 1 | 2 | 3 | 4 }
-  | { type: "confirmSolution" }
+  | { type: "openHint"; step: 1 | 2 | 3 | 4 }
   | { type: "hideSolution" }
   | { type: "step"; value: number | null };
 
@@ -57,11 +54,11 @@ const first = EXAMPLES[0];
 export const initialState: WorkbenchState = {
   example: 0, lastExample: 0, alphabet: first.alphabet, language: first.text,
   answerSource: "regex", regex: "", automaton: AUTOMATON_START, probe: "",
-  checked: null, hintsOpened: 0, hintShown: 0, step: null,
+  checked: null, hintsOpened: 0, step: null,
 };
 
 /** A new language: the old check, hints and solution no longer apply. */
-const languageChanged = (s: WorkbenchState): WorkbenchState => ({ ...s, checked: null, hintsOpened: 0, hintShown: 0, step: null });
+const languageChanged = (s: WorkbenchState): WorkbenchState => ({ ...s, checked: null, hintsOpened: 0, step: null });
 
 function reducer(s: WorkbenchState, a: Action): WorkbenchState {
   switch (a.type) {
@@ -85,17 +82,9 @@ function reducer(s: WorkbenchState, a: Action): WorkbenchState {
       const text = s.answerSource === "regex" ? s.regex : s.automaton;
       return { ...s, checked: { source: s.answerSource, text }, step: null };
     }
-    case "showHint": {
-      // opened steps can be revisited; the next one opens, except the solution, which asks first
-      if (a.step <= s.hintsOpened) return { ...s, hintShown: a.step };
-      if (a.step !== s.hintsOpened + 1) return s;
-      return a.step === 3 ? { ...s, hintShown: 3 } : { ...s, hintsOpened: a.step, hintShown: a.step };
-    }
-    case "confirmSolution": return s.hintsOpened === 2 ? { ...s, hintsOpened: 3, hintShown: 3 } : s;
-    case "hideSolution": {
-      const opened = Math.min(s.hintsOpened, 2) as HintStep;
-      return { ...s, hintsOpened: opened, hintShown: Math.min(s.hintShown, opened) as HintStep };
-    }
+    // hints open in order and stay open; hiding the solution closes it and the smallest DFA
+    case "openHint": return a.step === s.hintsOpened + 1 ? { ...s, hintsOpened: a.step } : s;
+    case "hideSolution": return { ...s, hintsOpened: Math.min(s.hintsOpened, 2) as HintStep };
     case "step": return { ...s, step: a.value };
   }
 }

@@ -57,6 +57,7 @@ export function CheckView() {
     : draft?.model ? { model: draft.model, title: `Your ${draft.kind.toUpperCase()} so far`, checked: false } : null;
   const skipped = !drawing?.checked && draft ? draft.skipped : [];
   const markedTag = fb?.conflated ? `(${conflationClaimNumber(fb)})` : undefined;
+  const langKey = `${state.alphabet}|${state.language}`;
 
   return (
     <>
@@ -106,7 +107,7 @@ export function CheckView() {
         </section>
       </div>
 
-      <StuckSection state={state} hints={derived.hints} dispatch={dispatch} />
+      <StuckSection key={langKey} state={state} hints={derived.hints} dispatch={dispatch} />
     </>
   );
 }
