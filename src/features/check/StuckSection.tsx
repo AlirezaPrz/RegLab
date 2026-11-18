@@ -152,6 +152,7 @@ export function StuckSection({ state, hints, dispatch }: { state: WorkbenchState
           </p>
           <div className="actions">
             <CopyButton text={automatonText(hints.dfa)} label="Copy the DFA as text" />
+            <CopyButton text={hints.regex} label="Copy the regex as text" />
             <button type="button" className="btn-quiet" onClick={hide}>Hide the solution</button>
           </div>
         </>
