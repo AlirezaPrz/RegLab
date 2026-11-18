@@ -33,7 +33,7 @@ function ToolTile({ name, what, href, formula, model, title }: {
 /** The landing page. */
 export function HomeView() {
   // real engine output for the tiles: the smallest DFA for a description, and an NFA as written
-  const dfa = useMemo(() => hints(readLanguage("a b", "ends in aa")).solution, []);
+  const dfa = useMemo(() => hints(readLanguage("a b", "ends in aa")).dfa, []);
   const nfa = useMemo(() => convertAutomaton("a b", TILE_NFA).model, []);
 
   return (
@@ -44,7 +44,6 @@ export function HomeView() {
           Write an answer and RegLab tells you whether it is right. When it is not, you get the exact string where it breaks
           and why. No account and no setup.
         </p>
-        <a className="home-cta" href="#/regular">Open Regular Languages</a>
       </section>
 
       <section className="home-tools" aria-labelledby="tools-h">

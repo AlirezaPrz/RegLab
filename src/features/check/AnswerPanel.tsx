@@ -30,7 +30,7 @@ export function AnswerPanel({ state, derived, dispatch }: { state: WorkbenchStat
       {state.answerSource === "regex" ? (
         <div className="field">
           <label htmlFor={ids.regex}>Your regular expression</label>
-          <input id={ids.regex} ref={regexRef} className="mono input-lg" type="text" value={state.regex} placeholder="b*ab*"
+          <input id={ids.regex} ref={regexRef} className="mono input-lg" type="text" value={state.regex} placeholder="(a+b)*"
             spellCheck={false} autoComplete="off" autoCapitalize="off" enterKeyHint="go"
             aria-invalid={!!error} aria-describedby={[ids.help, error ? ids.err : ""].join(" ").trim()}
             onChange={(e) => dispatch({ type: "regex", value: e.target.value })}
@@ -46,7 +46,7 @@ export function AnswerPanel({ state, derived, dispatch }: { state: WorkbenchStat
       ) : (
         <AutomatonEditor label="Your automaton, one transition per line" value={state.automaton} error={error}
           onChange={(v) => dispatch({ type: "automaton", value: v })}
-          onSubmit={check} submitHint="Press Ctrl+Enter or ⌘+Enter to check." />
+          onSubmit={check} submitHint={<span className="kbd-hint">Press Ctrl+Enter or ⌘+Enter to check.</span>} />
       )}
 
       <div className="actions">

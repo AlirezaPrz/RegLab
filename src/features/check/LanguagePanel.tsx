@@ -8,17 +8,17 @@ import { StringToken } from "../../ui/StringToken.tsx";
 import { Definition } from "../../ui/Typeset.tsx";
 import { Segmented } from "../../ui/Segmented.tsx";
 
-/** Condition forms the description parser understands, shown under "Condition syntax". */
+/** Condition forms the description parser understands, shown under "Condition syntax". Each is written one way only. */
 const SYNTAX: [string, string][] = [
   ["#_ab(w) = 1", "how often ab appears"],
+  ["#_bab(w) > 0", "contains bab"],
   ["starts with aba", "prefix"],
   ["ends in aa", "suffix"],
-  ["contains bab", "substring"],
-  ["|w| is even", "length"],
+  ["|w| = 3", "length"],
   ["first = last", "first and last symbols"],
-  ["sum divisible by 3", "digit alphabets"],
-  ["= != >= <= > <", "compare a count"],
-  ["mod 3 = 0", "count modulo m"],
+  ["sum mod 3 = 0", "sum of the digits (digit alphabets)"],
+  ["= != >= <= > <", "compare a count, length or sum"],
+  ["mod 2 = 0", "even; mod m = r in general"],
   ["and  or  xor  not", "combine, with ( )"],
 ];
 
@@ -61,6 +61,15 @@ export function LanguagePanel({ state, derived, dispatch, onTry }: {
           </div>
 
           {mode === "examples" ? (
+            <>
+            {/* phones get a compact list instead of the cards, so the definition and the answer stay near the top */}
+            <div className="examples-select field">
+              <label htmlFor={ids.ex + "-select"} className="sr-only">Example language</label>
+              <select id={ids.ex + "-select"} value={state.example === "own" ? "" : state.example}
+                onChange={(e) => dispatch({ type: "example", value: Number(e.target.value) })}>
+                {EXAMPLES.map((ex, i) => <option key={i} value={i}>{ex.name}</option>)}
+              </select>
+            </div>
             <fieldset className="examples">
               <legend className="sr-only">Example languages</legend>
               {EXAMPLES.map((ex, i) => (
@@ -70,12 +79,13 @@ export function LanguagePanel({ state, derived, dispatch, onTry }: {
                   <span className="example-name">{ex.name}</span>
                 </label>
               ))}
-              <p className="help examples-note">The selected language is written out on the right, with strings that are and aren't in it.</p>
-              <div className="examples-foot">
-                <button type="button" className="btn-quiet" onClick={() => dispatch({ type: "mode", value: "own" })}>Edit this one</button>
-                <button type="button" className="linkish-quiet" onClick={() => dispatch({ type: "blank" })}>Start from blank</button>
-              </div>
             </fieldset>
+            <p className="help examples-note">The selected language is written out in course notation, with strings that are and aren't in it.</p>
+            <div className="examples-foot">
+              <button type="button" className="btn-quiet" onClick={() => dispatch({ type: "mode", value: "own" })}>Edit this one</button>
+              <button type="button" className="linkish-quiet" onClick={() => dispatch({ type: "blank" })}>Start from blank</button>
+            </div>
+            </>
           ) : (
             <>
               <div className="row">
@@ -91,7 +101,7 @@ export function LanguagePanel({ state, derived, dispatch, onTry }: {
               <div className="field">
                 <label htmlFor={ids.lang}>All strings w such that…</label>
                 <textarea id={ids.lang} ref={langRef} className="mono" rows={2} value={state.language}
-                  placeholder="ends in aa and |w| is even"
+                  placeholder="ends in aa and |w| mod 2 = 0"
                   spellCheck={false} autoComplete="off" autoCapitalize="off"
                   aria-invalid={!!langErr} aria-describedby={[ids.help, langErr ? ids.err : ""].join(" ").trim()}
                   onChange={(e) => dispatch({ type: "language", value: e.target.value })} />

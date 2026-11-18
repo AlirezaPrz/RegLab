@@ -1,13 +1,14 @@
 /** Regex → automata: a regular expression, then the NFA built from it, the subset-construction DFA, and the smallest DFA. */
 import { Fragment, useId, useRef, useState, type ReactNode } from "react";
 import { automatonText, convertRegex, type AutomatonModel, type RegexConversion } from "../../engine/index.ts";
-import { Diagram } from "../../diagram/LazyDiagram.tsx";
+import { Diagram, DRAW_LIMIT } from "../../diagram/LazyDiagram.tsx";
 import { TransitionTable } from "../../diagram/TransitionTable.tsx";
 import { FieldError, selectInInput } from "../../ui/FieldError.tsx";
 import { SymbolKeys } from "../../ui/SymbolKeys.tsx";
 import { StringToken } from "../../ui/StringToken.tsx";
 import { TypesetRegex } from "../../ui/Typeset.tsx";
 import { CopyButton } from "../../ui/CopyButton.tsx";
+import { MergeTable } from "../../ui/MergeTable.tsx";
 import { plural } from "../../ui/text.ts";
 import { REGEX_EXAMPLES } from "./examples.ts";
 import { useConversion } from "./useConversion.ts";
@@ -20,17 +21,14 @@ const STEPS: { id: Step; name: string }[] = [
   { id: "minimal", name: "Smallest DFA" },
 ];
 
-/** Past this many states a diagram is too tangled to read, so the table is shown instead. */
-const DRAW_LIMIT = 40;
-
 /** How each automaton was made, in a sentence or two. */
 function caption(step: Step, c: RegexConversion): ReactNode {
   if (step === "nfa") return <>Built from <i className="math">R</i> piece by piece: each symbol is two states joined by that symbol, and union, concatenation and star are wired together with ε-moves.</>;
   if (step === "dfa") return <>The subset construction on the NFA: each DFA state is the set of NFA states the NFA could be in after the same input. A set is accepting when it contains an accepting NFA state (in bold).{c.dfa.names.includes("∅") && <> ∅ is the empty set, a dead state: once there, nothing is accepted.</>}</>;
   const n = c.minimal.names.length;
   return c.dfa.names.length > n
-    ? <>The DFA with equivalent states merged. No DFA for this language has fewer than {plural(n, "state")}.</>
-    : <>The subset construction already gave the smallest DFA: no DFA for this language has fewer than {plural(n, "state")}.</>;
+    ? <>The DFA with the states that no string can tell apart merged; the table shows which. No DFA for this language has fewer than {plural(n, "state")}.</>
+    : <>The subset construction already gave the smallest DFA: no DFA for this language has fewer than {plural(n, "state")}. Only the names change.</>;
 }
 
 export function RegexToAutomata({ switcher, draft, onChange, onConvertBack }: {
@@ -116,10 +114,10 @@ export function RegexToAutomata({ switcher, draft, onChange, onConvertBack }: {
         </div>
       </section>
 
-      <section className="convert-out" aria-labelledby={ids.out}>
+      <section className="out" aria-labelledby={ids.out}>
         <h2 id={ids.out} className="h-section">Automata for <i className="math">R</i></h2>
         {!c ? (
-          <p className="convert-empty">Type a regular expression, or pick an example, to see an NFA for it and the DFAs that come from it.</p>
+          <p className="out-empty">Type a regular expression, or pick an example, to see an NFA for it and the DFAs that come from it.</p>
         ) : (
           <>
             {stale && <p className="stale-note" role="status">Showing the last expression that could be read. Fix the error above to update.</p>}
@@ -141,10 +139,10 @@ export function RegexToAutomata({ switcher, draft, onChange, onConvertBack }: {
               ))}
             </div>
 
-            <div role="tabpanel" id={`${ids.tabs}-panel`} aria-labelledby={`${ids.tabs}-${step}`} className="convert-panel">
-              <p className="convert-caption">{caption(step, c)}</p>
-              <div className={"convert-figure" + (step === "dfa" ? " has-aside" : "")}>
-                <div className="convert-diagram">
+            <div role="tabpanel" id={`${ids.tabs}-panel`} aria-labelledby={`${ids.tabs}-${step}`} className="out-panel">
+              <p className="out-caption">{caption(step, c)}</p>
+              <div className={"figure" + (step !== "nfa" ? " has-aside" : "")}>
+                <div className="out-diagram">
                   {model!.names.length <= DRAW_LIMIT
                     ? <Diagram key={step} model={model!} title={`${STEPS.find((s) => s.id === step)!.name} for R`} dimmed={stale} />
                     : <>
@@ -153,7 +151,7 @@ export function RegexToAutomata({ switcher, draft, onChange, onConvertBack }: {
                       </>}
                 </div>
                 {step === "dfa" && (
-                  <table className="ttable subsets">
+                  <table className="ttable side-table">
                     <caption>What each DFA state stands for</caption>
                     <thead><tr><th scope="col">DFA state</th><th scope="col">Set of NFA states</th></tr></thead>
                     <tbody>
@@ -170,6 +168,7 @@ export function RegexToAutomata({ switcher, draft, onChange, onConvertBack }: {
                     </tbody>
                   </table>
                 )}
+                {step === "minimal" && <MergeTable names={c.minimal.names} merged={c.merged} caption="Which DFA states each one merges" />}
               </div>
               <div className="actions">
                 <CopyButton text={automatonText(model!)} label="Copy as text" />

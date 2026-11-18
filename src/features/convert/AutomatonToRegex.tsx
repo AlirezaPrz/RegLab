@@ -61,22 +61,22 @@ export function AutomatonToRegex({ switcher, draft, onChange, onConvertBack }: {
             <div className="convert-machine">
               {c
                 ? <Diagram model={c.model} title={`Your ${kind}`} dimmed={stale} />
-                : <p className="convert-empty">The diagram appears here as you write the automaton.</p>}
+                : <p className="out-empty">The diagram appears here as you write the automaton.</p>}
             </div>
           </div>
         </div>
       </section>
 
-      <section className="convert-out" aria-labelledby={ids.out}>
+      <section className="out" aria-labelledby={ids.out}>
         <h2 id={ids.out} className="h-section">A regular expression for it</h2>
         {!c ? (
-          <p className="convert-empty">Write a DFA or NFA, or pick an example, to get a regular expression for its language.</p>
+          <p className="out-empty">Write a DFA or NFA, or pick an example, to get a regular expression for its language.</p>
         ) : (
           <>
             {stale && <p className="stale-note" role="status">Showing the last automaton that could be read. Fix the error above to update.</p>}
-            <div className="convert-result" aria-live="polite">
+            <div className="out-result" aria-live="polite">
               <p className="convert-regex math"><i>R</i> <span className="m-op">=</span> <TypesetRegex text={c.regex} /></p>
-              <p className="convert-caption">
+              <p className="out-caption">
                 {c.eliminatedFrom === "automaton"
                   ? <>Found by state elimination on your {kind}: </>
                   : <>Found by state elimination on the smallest DFA for the same language ({plural(c.minStates, "state")}), which gave a shorter expression than your {kind}: </>}

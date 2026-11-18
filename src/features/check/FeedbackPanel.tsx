@@ -43,7 +43,7 @@ export function FeedbackPanel({ derived, onTry }: { derived: Derived; onTry: (w:
 
 /** The verdict on a readable answer. Without onTry its strings are plain text (for the landing page walkthrough). */
 export function Verdict({ answer, fb, stale, onTry }: { answer: Answer; fb: Feedback; stale: boolean; onTry?: (w: string) => void }) {
-  const M = answer.kind === "regex" ? "r" : "M";
+  const M = answer.kind === "regex" ? "R" : "M";
   const what = answer.kind === "regex" ? "regular expression" : answer.kind === "nfa" ? "NFA" : "DFA";
   const t = (w: string) => <StringToken value={w} onTry={onTry} />;
 

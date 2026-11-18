@@ -3,10 +3,10 @@
  * A reducer holds only what the student typed or chose; everything else is derived from the
  * engine, memoized on the inputs it depends on.
  */
-import { useMemo, useReducer } from "react";
+import { useDeferredValue, useMemo, useReducer } from "react";
 import {
-  readLanguage, readAnswer, checkAnswer, probe, samples, hints, toInputError,
-  type Language, type AnswerSource, type Answer, type Feedback, type InputError, type Hints, type Probe,
+  readLanguage, readAnswer, checkAnswer, probe, samples, hints, draftAutomaton, toInputError,
+  type Language, type AnswerSource, type Answer, type Feedback, type InputError, type Hints, type Probe, type Draft,
 } from "../engine/index.ts";
 import { EXAMPLES } from "./examples.ts";
 
@@ -27,13 +27,16 @@ export interface WorkbenchState {
   probe: string;
   /** what was submitted with "Check"; feedback is about this, not the live text */
   checked: { source: AnswerSource; text: string } | null;
-  /** hint level the student opened: 0 none, 1 state count, 2 + one string per state */
-  hintLevel: 0 | 1 | 2;
-  /** solution shown; reset whenever the language changes */
-  solutionShown: boolean;
+  /** hints opened, in order: 1 what to remember, 2 what each state means, 3 the full solution, 4 the smallest DFA */
+  hintsOpened: HintStep;
   /** the step of the probe path that is highlighted (null: the last) */
   step: number | null;
 }
+
+export type HintStep = 0 | 1 | 2 | 3 | 4;
+
+/** What the automaton editor starts with: the two lines every automaton needs. */
+export const AUTOMATON_START = "start: q0\naccept: \n";
 
 /** Every change the UI can make. Editing the language clears the check, hints and solution. */
 export type Action =
@@ -43,19 +46,19 @@ export type Action =
   | { type: "alphabet" | "language" | "regex" | "automaton" | "probe"; value: string }
   | { type: "answerSource"; value: AnswerSource }
   | { type: "check" }
-  | { type: "hint"; level: 0 | 1 | 2 }
-  | { type: "solution"; shown: boolean }
+  | { type: "openHint"; step: 1 | 2 | 3 | 4 }
+  | { type: "hideSolution" }
   | { type: "step"; value: number | null };
 
 const first = EXAMPLES[0];
 export const initialState: WorkbenchState = {
   example: 0, lastExample: 0, alphabet: first.alphabet, language: first.text,
-  answerSource: "regex", regex: "", automaton: "", probe: "",
-  checked: null, hintLevel: 0, solutionShown: false, step: null,
+  answerSource: "regex", regex: "", automaton: AUTOMATON_START, probe: "",
+  checked: null, hintsOpened: 0, step: null,
 };
 
 /** A new language: the old check, hints and solution no longer apply. */
-const languageChanged = (s: WorkbenchState): WorkbenchState => ({ ...s, checked: null, hintLevel: 0, solutionShown: false, step: null });
+const languageChanged = (s: WorkbenchState): WorkbenchState => ({ ...s, checked: null, hintsOpened: 0, step: null });
 
 function reducer(s: WorkbenchState, a: Action): WorkbenchState {
   switch (a.type) {
@@ -79,8 +82,9 @@ function reducer(s: WorkbenchState, a: Action): WorkbenchState {
       const text = s.answerSource === "regex" ? s.regex : s.automaton;
       return { ...s, checked: { source: s.answerSource, text }, step: null };
     }
-    case "hint": return { ...s, hintLevel: a.level };
-    case "solution": return { ...s, solutionShown: a.shown };
+    // hints open in order and stay open; hiding the solution closes it and the smallest DFA
+    case "openHint": return a.step === s.hintsOpened + 1 ? { ...s, hintsOpened: a.step } : s;
+    case "hideSolution": return { ...s, hintsOpened: Math.min(s.hintsOpened, 2) as HintStep };
     case "step": return { ...s, step: a.value };
   }
 }
@@ -101,6 +105,8 @@ export interface Derived {
   probe: Probe | null;
   /** the highlighted step of the probe path: the one the student picked, else the last */
   activeStep: number | null;
+  /** the automaton answer as far as it has been written, for the drawing beside the editor */
+  draft: Draft | null;
 }
 
 /** The tool's state, a dispatch function, and everything derived from them. */
@@ -136,11 +142,19 @@ export function useWorkbench() {
     return probe(state.probe, lang.language, answer);
   }, [state.probe, lang.language, result, stale]);
 
+  // typing runs ahead of drawing, so a long automaton never slows the editor down
+  const automatonText = useDeferredValue(state.automaton);
+  const draft = useMemo(
+    () => (lang.language && state.answerSource === "automaton" ? draftAutomaton(automatonText, lang.language.alphabet) : null),
+    [lang.language, state.answerSource, automatonText],
+  );
+
   const path = probeResult?.path;
   const derived: Derived = {
     language: lang.language, languageError: lang.error,
     samples: sampleList, hints: hintData, result, stale, probe: probeResult,
     activeStep: state.step ?? (path ? path.length - 1 : null),
+    draft,
   };
   return { state, dispatch, derived };
 }

@@ -5,6 +5,9 @@ import type { DiagramProps } from "./AutomatonDiagram.tsx";
 // dagre and the renderer load only when the first diagram is needed
 const AutomatonDiagram = lazy(() => import("./AutomatonDiagram.tsx").then((m) => ({ default: m.AutomatonDiagram })));
 
+/** Past this many states a diagram is too tangled to read, so pages show the table instead. */
+export const DRAW_LIMIT = 40;
+
 export function Diagram(props: DiagramProps) {
   return (
     <Suspense fallback={<p className="help" role="status">Drawing the diagram…</p>}>

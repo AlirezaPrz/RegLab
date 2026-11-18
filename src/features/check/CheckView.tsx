@@ -1,4 +1,4 @@
-/** The regular-languages tool: the language band, the answer and the verdict, wired to one workbench state. */
+/** The regular-languages tool: the language band, the answer beside the verdict, and the hints below, wired to one workbench state. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkbench } from "../../state/useWorkbench.ts";
 import { Diagram } from "../../diagram/LazyDiagram.tsx";
@@ -8,7 +8,7 @@ import { LanguagePanel } from "./LanguagePanel.tsx";
 import { AnswerPanel } from "./AnswerPanel.tsx";
 import { FeedbackPanel, conflationClaimNumber } from "./FeedbackPanel.tsx";
 import { ProbePanel } from "./ProbePanel.tsx";
-import { HintsPanel, SolutionPanel } from "./HintsPanel.tsx";
+import { StuckSection } from "./StuckSection.tsx";
 
 const scrollBehavior = (): ScrollBehavior =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
@@ -47,8 +47,17 @@ export function CheckView() {
   const model = answer && answer.kind !== "regex" ? answer.model : null;
   const steps = derived.probe?.path ?? null;
   const stepIdx = derived.activeStep;
-  const active = useMemo(() => (steps && stepIdx !== null ? new Set(steps[stepIdx].states) : undefined), [steps, stepIdx]);
+  // the trace shows on the diagram only once a string has been typed or a step picked, so an empty box marks nothing
+  const tracing = state.probe.trim() !== "" || state.step !== null;
+  const active = useMemo(() => (tracing && steps && stepIdx !== null ? new Set(steps[stepIdx].states) : undefined), [tracing, steps, stepIdx]);
   const marked = fb?.conflated?.studentState ?? null;
+  // the drawing beside the editor: the checked answer while it is current, so marks and traces line
+  // up with it; otherwise the automaton as far as it has been written
+  const draft = derived.draft;
+  const drawing = model && !derived.stale
+    ? { model, title: `Your ${answer!.kind.toUpperCase()}`, checked: true }
+    : draft?.model ? { model: draft.model, title: `Your ${draft.kind.toUpperCase()} so far`, checked: false } : null;
+  const skipped = !drawing?.checked && draft ? draft.skipped : [];
   const markedTag = fb?.conflated ? `(${conflationClaimNumber(fb)})` : undefined;
   const langKey = `${state.alphabet}|${state.language}`;
 
@@ -73,35 +82,43 @@ export function CheckView() {
         <div className="work-answer">
           <AnswerPanel state={state} derived={derived} dispatch={dispatch} />
         </div>
-        <div className="work-hints">
-          <HintsPanel key={langKey} state={state} hints={derived.hints} dispatch={dispatch} />
-        </div>
         <section className="work-right panel" aria-labelledby="verdict-heading">
           <h2 id="verdict-heading" ref={verdictRef} tabIndex={-1} className="h-section">Verdict</h2>
           <div aria-live="polite" aria-atomic="false">
             <FeedbackPanel derived={derived} onTry={onTry} />
           </div>
-          {model && (
+          {fb && !fb.correct && !derived.stale && derived.hints && (
+            <p className="verdict-next">
+              <button type="button" className="btn-quiet" onClick={() => {
+                const h = document.querySelector<HTMLElement>("#stuck h2");
+                h?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
+                h?.focus({ preventScroll: true });
+              }}>Stuck? Get a hint ↓</button>
+            </p>
+          )}
+          {drawing && (
             <div className="answer-diagram">
-              <h3 className="h-sub">Your {answer!.kind.toUpperCase()}</h3>
+              <h3 className="h-sub">{drawing.title}</h3>
               <Diagram
-                model={model}
-                title={`Your ${answer!.kind.toUpperCase()}`}
-                active={derived.stale ? undefined : active}
-                stuck={!derived.stale && !!active && active.size === 0}
-                marked={derived.stale ? null : marked}
+                model={drawing.model}
+                title={drawing.title}
+                active={drawing.checked ? active : undefined}
+                stuck={drawing.checked && !!active && active.size === 0}
+                marked={drawing.checked ? marked : null}
                 markedTag={markedTag}
-                dimmed={derived.stale}
               />
+              {skipped.length > 0 && (
+                <p className="help">Not drawn yet: {skipped.length === 1 ? "line" : "lines"} {skipped.join(", ")} can't be read.</p>
+              )}
             </div>
           )}
-          <ProbePanel ref={probeRef} state={state} probe={derived.probe} activeStep={stepIdx} model={derived.stale ? null : model}
+          {!drawing && draft && <p className="help answer-diagram">Add a <code>start:</code> line to see a drawing of your automaton.</p>}
+          <ProbePanel ref={probeRef} state={state} probe={derived.probe} activeStep={tracing ? stepIdx : null} model={derived.stale ? null : model}
             kind={answer && !derived.stale ? answer.kind : null} dispatch={dispatch} />
         </section>
-        {state.solutionShown && derived.hints && (
-          <div className="work-solution"><SolutionPanel hints={derived.hints} dispatch={dispatch} /></div>
-        )}
       </div>
+
+      <StuckSection key={langKey} state={state} hints={derived.hints} dispatch={dispatch} />
     </>
   );
 }

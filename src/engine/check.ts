@@ -4,9 +4,9 @@
  * only render these results; no automata logic lives in them.
  */
 import {
-  type DFA, type NFA, type ParsedAutomaton,
-  EPS, regexToDfa, regexToNfa, parseRegex, parseSpec, parseAutomaton, nfaToDfa, compare, minimize, dfaToRegex, nfaToRegex,
-  accepts, trace, sampleStrings, nerodeClasses, parseAlphabet, EngineError,
+  type DFA, type NFA, type ParsedAutomaton, type Remember,
+  EPS, regexToDfa, regexToNfa, parseRegex, parseSpec, explainSpec, parseAutomaton, readAutomatonLines, nfaToDfa, compare, minimize,
+  dfaToRegex, nfaToRegex, accepts, trace, accessStrings, sampleStrings, parseAlphabet, EngineError,
 } from "./engine.ts";
 
 
@@ -35,23 +35,59 @@ export function samples(lang: Language, limit = 7): { yes: string[]; no: string[
   return { yes: sampleStrings(lang.dfa, true, limit), no: sampleStrings(lang.dfa, false, limit) };
 }
 
-/** Progressive hints, ending with the full solution. */
+/** A state of the DFA in the hints, with what it means. */
+export interface StateNote {
+  name: string;
+  /**
+   * What is true of w exactly when the DFA is in this state after reading w, in description
+   * notation. null for a merged state with no short description (dead: no extension of w is in L;
+   * all: every extension is).
+   */
+  says: string | null;
+  sink: "dead" | "all" | null;
+  start: boolean;
+  accepting: boolean;
+  /** a shortest string that leads to it */
+  example: string;
+}
+
+/**
+ * The hints, in the order they open: what a DFA for the language has to remember; its states and
+ * what each means; the DFA itself with a regular expression (the full solution); and the smallest
+ * DFA, with the states it merges.
+ */
 export interface Hints {
-  /** states in the minimal DFA */
-  minStates: number;
-  /** one shortest string reaching each state of the minimal DFA */
-  classes: { rep: string; accepting: boolean }[];
-  /** the minimal DFA itself: the full solution */
-  solution: AutomatonModel;
+  remember: Remember[];
+  /** the DFA built from what the description keeps track of (see explainSpec) */
+  dfa: AutomatonModel;
+  states: StateNote[];
+  /** the smallest DFA, states p0, p1, …; merged[i] lists the states of `dfa` that p_i stands for */
+  smallest: AutomatonModel;
+  merged: string[][];
   /** a regular expression for the language, built from the DFA by state elimination */
   regex: string;
 }
 
-/** Hints for a language. */
+/** The hints for a language. */
 export function hints(lang: Language): Hints {
-  const classes = nerodeClasses(lang.dfa);
-  const min = minimize(lang.dfa).dfa;
-  return { minStates: classes.length, classes, solution: modelFromDfa(min), regex: dfaToRegex(lang.dfa) };
+  const ex = explainSpec(lang.text, lang.alphabet);
+  const { dfa: min, classOf } = minimize(ex.dfa);
+  const examples = accessStrings(ex.dfa);
+  return {
+    remember: ex.remember,
+    dfa: modelFromDfa(ex.dfa, ex.names),
+    states: ex.names.map((name, s) => ({
+      name, says: ex.says[s], sink: ex.sink[s], start: s === ex.dfa.start, accepting: ex.dfa.accept[s], example: examples[s] ?? "",
+    })),
+    smallest: modelFromDfa(min, min.accept.map((_, i) => "p" + i)),
+    merged: mergedNames(min.n, classOf, ex.names),
+    regex: dfaToRegex(lang.dfa),
+  };
+}
+
+/** For each state of a minimal DFA, the names of the states it merges (classOf maps old states to new ones). */
+function mergedNames(n: number, classOf: number[], names: string[]): string[][] {
+  return Array.from({ length: n }, (_, i) => names.filter((_, s) => classOf[s] === i));
 }
 
 
@@ -280,8 +316,9 @@ export interface RegexConversion {
   dfa: AutomatonModel;
   /** subsets[i]: the NFA states that DFA state i stands for (empty for ∅) */
   subsets: string[][];
-  /** the smallest DFA, states q0, q1, … */
+  /** the smallest DFA, states q0, q1, …; merged[i] lists the DFA states (A, B, …) that q_i stands for */
   minimal: AutomatonModel;
+  merged: string[][];
   samples: { yes: string[]; no: string[] };
 }
 
@@ -293,12 +330,14 @@ export function convertRegex(alphabetSrc: string, src: string): RegexConversion 
     const nfaNames = Array.from({ length: nfa.n }, (_, i) => "q" + i);
     const dfa = nfaToDfa(nfa);
     const subsets = dfa.labels!.map((set) => set.map((i) => nfaNames[i]));
-    const min = minimize(dfa).dfa;
+    const dfaNames = subsetNames(subsets);
+    const { dfa: min, classOf } = minimize(dfa);
     return {
       nfa: modelFromNfa(nfa, nfaNames),
-      dfa: modelFromDfa(dfa, subsetNames(subsets)),
+      dfa: modelFromDfa(dfa, dfaNames),
       subsets,
       minimal: modelFromDfa(min),
+      merged: mergedNames(min.n, classOf, dfaNames),
       samples: { yes: sampleStrings(min, true, 7), no: sampleStrings(min, false, 7) },
     };
   } catch (e) { throw tag(e, "input"); }
@@ -358,6 +397,53 @@ export function automatonText(m: AutomatonModel): string {
     `accept: ${m.names.filter((_, i) => m.accept[i] && used.has(i)).join(" ")}`,
     ...m.edges.map((e) => `${m.names[e.from]} ${e.symbols.join(",")} ${m.names[e.to]}`),
   ].join("\n");
+}
+
+
+/** An automaton as far as it has been written, drawn while the student types. */
+export interface Draft {
+  /** null until there is a start line */
+  model: AutomatonModel | null;
+  /** "nfa" once it has an ε-move or two moves on one symbol from one state */
+  kind: "dfa" | "nfa";
+  /** lines that can't be read yet, left out of the drawing (1-based) */
+  skipped: number[];
+}
+
+/**
+ * Reads an automaton the forgiving way: lines that can't be read yet are skipped, and states named
+ * only on the accept line are drawn too. When the text is complete, the states are numbered as
+ * parseAutomaton numbers them, so the drawing matches the checked answer.
+ */
+export function draftAutomaton(src: string, alphabet: readonly string[]): Draft {
+  let start: string | null = null;
+  const accept = new Set<string>(), moves: { from: string; sym: string; to: string }[] = [], skipped: number[] = [];
+  for (const { line, read } of readAutomatonLines(src, alphabet)) {
+    if (read.t === "error") skipped.push(line);
+    else if (read.t === "start") start = read.name;
+    else if (read.t === "accept") read.names.forEach((a) => accept.add(a));
+    else for (const sym of read.symbols) moves.push({ from: read.from, sym, to: read.to });
+  }
+  if (start === null) return { model: null, kind: "dfa", skipped };
+  const names: string[] = [], index = new Map<string, number>();
+  const id = (name: string) => { if (!index.has(name)) { index.set(name, names.length); names.push(name); } return index.get(name)!; };
+  id(start);
+  for (const m of moves) { id(m.from); id(m.to); }
+  for (const a of accept) id(a);
+  const edges = moves.map((m) => ({ from: id(m.from), to: id(m.to), sym: m.sym }));
+  const target = new Map<string, number>();
+  const nfa = edges.some((e) => {
+    if (e.sym === EPS) return true;
+    const k = e.from + " " + e.sym;
+    if (target.has(k) && target.get(k) !== e.to) return true;
+    target.set(k, e.to);
+    return false;
+  });
+  return {
+    model: { names, start: 0, accept: names.map((n) => accept.has(n)), edges: mergeEdges(edges) },
+    kind: nfa ? "nfa" : "dfa",
+    skipped,
+  };
 }
 
 

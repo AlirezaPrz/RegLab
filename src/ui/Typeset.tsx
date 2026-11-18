@@ -9,7 +9,7 @@ const OPS: Record<string, string> = { ">=": "≥", "<=": "≤", "!=": "≠", "==
 /** A language description, e.g. "#_ab(w) = 1 and ends in aa". */
 export function TypesetSpec({ text }: { text: string }) {
   const out: ReactNode[] = [];
-  const re = /#_?\{?([^\s(){}=<>!≥≤≠]+)\}?(\(w\))?|>=|<=|!=|==|[=<>≥≤≠]|\|w\||\bw\b|\b(and|or|xor|not|mod|is|divisible|by)\b/g;
+  const re = /#_?\{?([^\s(){}=<>!≥≤≠]+)\}?(\(w\))?|>=|<=|!=|==|[=<>≥≤≠]|\|w\||\bw\b|\b(and|or|xor|not|mod)\b/g;
   let last = 0;
   for (const m of text.matchAll(re)) {
     const i = m.index!;
