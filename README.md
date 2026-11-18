@@ -51,7 +51,7 @@ Rules worth keeping:
 
 - **The engine is the only place that knows about automata.** Components render what `check.ts` returns. If the UI needs a new fact, add a function to `check.ts` and a test to `test.js`.
 - **Errors carry their location.** `EngineError` has `from`/`to` (character range in the typed text) or `line` (automata). `FieldError` shows them under the input.
-- **The solution is gated.** The hints form a ladder that opens in place, one rung at a time: what to remember, what each state means, the full solution (which asks first), and the smallest DFA, which appears only when merging really makes it smaller. They never say how many states there are, since that is a hint in itself. Everything closes whenever the language changes (`languageChanged` in `useWorkbench.ts`).
+- **The solution is gated.** The hints form a ladder that opens in place, one rung at a time: what to remember, what each state means, the full solution (which asks first), and the smallest DFA, which shows the smaller DFA merging gives, or says the solution already is the smallest. They never say how many states there are, since that is a hint in itself. Everything closes whenever the language changes (`languageChanged` in `useWorkbench.ts`).
 - **State descriptions are checked, not trusted.** `explainSpec` describes each state in the description syntax, so `test.js` parses every description back and checks it is exactly the set of strings that reach that state. Keep new trackers to that rule.
 - **Each description form is written one way.** Retired forms (`contains`, `is even`, `divisible by`, `begins with`, `ends with`, `length`) are rejected with an error that names the form to use; add a `retired(...)` line in `parseDescription` rather than a synonym.
 

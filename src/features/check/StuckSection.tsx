@@ -1,7 +1,7 @@
 /**
  * The hints, as a ladder read top to bottom: what a DFA for the language has to remember, what each
- * of its states means, the full solution (which asks first), and the smallest DFA when it is
- * smaller still. Each hint opens in place and stays open, and only the next one can be opened, so
+ * of its states means, the full solution (which asks first), and the smallest DFA, or that the
+ * solution already is the smallest. Each hint opens in place and stays open, and only the next one can be opened, so
  * there is one thing to do at a time. Nothing here says how many states there are: that is a hint
  * in itself. Everything closes when the language changes (the reducer resets the hints, and
  * CheckView remounts this section, which drops a pending confirmation).
@@ -143,7 +143,6 @@ export function StuckSection({ state, hints, dispatch }: { state: WorkbenchState
         <>
           <p className="out-caption">Each move goes to the state whose description is true after one more symbol.</p>
           <div className="rung-figure"><Drawing hints={hints} which="dfa" /></div>
-          {!smaller && <p className="out-caption rung-note">Any two of these states can be told apart by some string, so this is also the smallest DFA for the language.</p>}
           <h4 className="h-sub">A regular expression</h4>
           <p className="solution-regex math"><TypesetRegex text={hints.regex} /></p>
           <p className="help">
@@ -158,14 +157,19 @@ export function StuckSection({ state, hints, dispatch }: { state: WorkbenchState
         </>
       ),
     },
-    // only when merging really makes it smaller; otherwise the solution says it is already the smallest
-    ...(smaller && opened >= 3 ? [{
-      step: 4 as Step, title: "The smallest DFA",
-      promise: "Some of these states can't be told apart by any string. Merging them gives the smallest DFA.",
-      body: () => (
+    // always after the solution: either the smaller DFA merging gives, or that the solution is already the smallest
+    {
+      step: 4, title: "The smallest DFA",
+      promise: "Whether any states of the solution can be merged into a smaller DFA.",
+      body: () => (!smaller ? (
+        <p className="out-caption">
+          The smallest DFA is the same as the one in the full solution. Any two of its states can be told apart by some string,
+          so none of them can be merged.
+        </p>
+      ) : (
         <>
           <p className="out-caption">
-            From each group of merged states, exactly the same strings lead to acceptance, so one state can do the work of the
+            Some states of the solution can't be told apart by any string. From each group of merged states, exactly the same strings lead to acceptance, so one state can do the work of the
             whole group. The smallest DFA accepts the same language, but its states no longer say as much.
           </p>
           <div className="figure has-aside rung-figure">
@@ -174,8 +178,8 @@ export function StuckSection({ state, hints, dispatch }: { state: WorkbenchState
           </div>
           <div className="actions"><CopyButton text={automatonText(hints.smallest)} label="Copy as text" /></div>
         </>
-      ),
-    }] : []),
+      )),
+    },
   ];
 
   return (
