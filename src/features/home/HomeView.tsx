@@ -1,4 +1,4 @@
-/** The landing page: what RegLab is, its tools, how the regular-languages tool works, and the BIG RESULT. */
+/** The landing page: what RegLab is, its tools, a walkthrough of the Regular Languages tool, and the BIG RESULT. */
 import { useMemo, type ReactNode } from "react";
 import { convertAutomaton, hints, readLanguage, type AutomatonModel } from "../../engine/index.ts";
 import { Diagram } from "../../diagram/LazyDiagram.tsx";
@@ -9,14 +9,14 @@ import "./home.css";
 // an NFA for (a+b)*ab, drawn in the converter's tile
 const TILE_NFA = "start: q0\naccept: q2\nq0 a,b q0\nq0 a q1\nq1 b q2";
 
-/** One tool: its name, what it does, and a small engine-drawn example of what it works with. */
+/** A tool's tile, with a small engine-drawn example. */
 function ToolTile({ name, what, href, formula, model, title }: {
   name: string; what: string; href: string; formula: ReactNode; model: AutomatonModel; title: string;
 }) {
   return (
-    <li className="tool-tile">
+    <li>
       <a href={href} className="tool-link">
-        <span className="tool-text">
+        <span>
           <span className="tool-name">{name}</span>
           <span className="tool-what">{what}</span>
           <span className="tool-open">Open <span aria-hidden="true">→</span></span>
@@ -30,9 +30,8 @@ function ToolTile({ name, what, href, formula, model, title }: {
   );
 }
 
-/** The landing page. */
 export function HomeView() {
-  // real engine output for the tiles: the smallest DFA for a description, and an NFA as written
+  // real engine output: a description's DFA, and an NFA as written
   const dfa = useMemo(() => hints(readLanguage("a b", "ends in aa")).dfa, []);
   const nfa = useMemo(() => convertAutomaton("a b", TILE_NFA).model, []);
 

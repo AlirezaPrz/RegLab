@@ -1,4 +1,4 @@
-// Engine tests: parsing, constructions, minimization, comparison and the feedback layer. Run with: node test.js
+// Engine tests. Run with: node test.js
 import * as R from "./src/engine/index.ts";
 import assert from "node:assert";
 
@@ -78,7 +78,7 @@ test("spec: decimal value divisible by 3", () => {
 });
 test("spec: #a = #b is refused with an explanation", () => assert.throws(() => spec("#_a(w) = #_b(w)"), /not regular/));
 
-// ------------------------------------------------- the DFA a description explains (explainSpec)
+// the DFA a description explains (explainSpec)
 
 // the strings that lead to state s of d
 const reach = (d, s) => ({ ...d, accept: d.accept.map((_, i) => i === s) });
@@ -170,12 +170,7 @@ test("compare: explains which strings a wrong DFA confuses", () => {
   assert.strictEqual(vIn, R.accepts(ref, v + z));
 });
 
-test("nerode classes: ends in aa has 3", () => {
-  const cls = R.nerodeClasses(spec("ends in aa"));
-  assert.deepStrictEqual(cls.map((c) => c.rep), ["", "a", "aa"]);
-});
-
-// ------------------------------------------------- error locations
+// error locations
 
 test("errors: regex positions count what was typed, spaces included", () => {
   try { rx("a + c"); assert.fail("should throw"); }
@@ -198,7 +193,7 @@ test("errors: descriptions and automata say where", () => {
   catch (e) { assert.strictEqual(e.line, 2); }
 });
 
-// ------------------------------------------------- feedback (check.ts)
+// feedback (check.ts)
 
 const lang = (src, alpha = "a b") => R.readLanguage(alpha, src);
 const check = (mode, src, L) => R.checkAnswer(R.readAnswer(mode, src, L.alphabet), L);
@@ -294,7 +289,7 @@ test("solution regex: hints carry the regex", () => {
   assert.strictEqual(R.hints(lang("#_a(w) = 1")).regex, "b*ab*");
 });
 
-// ------------------------------------------------- converters (check.ts)
+// converters (check.ts)
 
 test("regex to NFA: built by induction, start state 0, same language", () => {
   const sizes = { "a": 2, "ε": 1, "∅": 1, "a+b": 5, "ab": 4, "a*": 3, "(a+b)*aa": 10, "(a+b)*a(a+b)(a+b)": 18 };

@@ -1,4 +1,4 @@
-/** The app's icons: hand-drawn 20×20 paths in one stroke weight, coloured by currentColor. */
+/** 20×20 paths in one stroke weight, coloured by currentColor. */
 const PATHS = {
   check: "M4 10.5l4 4 8-9",
   cross: "M5 5l10 10M15 5L5 15",
@@ -10,9 +10,9 @@ const PATHS = {
   copy: "M7.5 7.5h8.5v9H7.5zM12.5 7.5V4H4v9h3.5",
 } as const;
 
-export type IconName = keyof typeof PATHS;
+type IconName = keyof typeof PATHS;
 
-/** An icon. Without a label it is decorative and hidden from screen readers. */
+/** Without a label the icon is decorative and hidden from screen readers. */
 export function Icon({ name, size = 18, label }: { name: IconName; size?: number; label?: string }) {
   return (
     <svg

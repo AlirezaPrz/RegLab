@@ -1,4 +1,4 @@
-/** The verdict on a checked answer, written as a short proof: the claim, numbered evidence, then notes. */
+/** The verdict on a checked answer, set like a short proof: the claim, numbered evidence, then notes. */
 import type { ReactNode } from "react";
 import type { Answer, Feedback } from "../../engine/index.ts";
 import type { Derived } from "../../state/useWorkbench.ts";
@@ -13,7 +13,7 @@ const KIND: Record<Exclude<Feedback["verdict"], "correct">, string> = {
   "too-strict": "It is too strict: everything it accepts is right, but it misses some strings.",
 };
 
-/** The confused-strings claim comes after the wrongly accepted and wrongly rejected strings. */
+/** The conflated-strings claim follows the wrongly accepted and wrongly rejected ones. */
 export const conflationClaimNumber = (fb: Feedback) => (fb.extra !== null ? 1 : 0) + (fb.missing !== null ? 1 : 0) + 1;
 
 // a state name in running text
@@ -21,7 +21,7 @@ const St = ({ children }: { children: ReactNode }) => <code className="state-nam
 const stateLabel = (name: string | null) => (name === null ? <>the implied dead state</> : <St>{name}</St>);
 const list = (items: ReactNode[]) => items.map((x, i) => <span key={i}>{i > 0 && (i === items.length - 1 ? " and " : ", ")}{x}</span>);
 
-/** The verdict panel, including its empty and unreadable-answer states. */
+/** The verdict, or its empty and unreadable-answer states. */
 export function FeedbackPanel({ derived, onTry }: { derived: Derived; onTry: (w: string) => void }) {
   const r = derived.result;
   if (!r) {
@@ -41,7 +41,7 @@ export function FeedbackPanel({ derived, onTry }: { derived: Derived; onTry: (w:
   return <Verdict answer={r.answer} fb={r.feedback} stale={derived.stale} onTry={onTry} />;
 }
 
-/** The verdict on a readable answer. Without onTry its strings are plain text (for the landing page walkthrough). */
+/** Without `onTry` its strings are plain text (the landing page walkthrough uses this). */
 export function Verdict({ answer, fb, stale, onTry }: { answer: Answer; fb: Feedback; stale: boolean; onTry?: (w: string) => void }) {
   const M = answer.kind === "regex" ? "R" : "M";
   const what = answer.kind === "regex" ? "regular expression" : answer.kind === "nfa" ? "NFA" : "DFA";

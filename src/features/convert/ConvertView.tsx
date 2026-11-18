@@ -1,12 +1,13 @@
 /** The regex ⇄ automata converter: one direction at a time, each keeping its own draft. */
 import { useId, useState } from "react";
 import { Segmented } from "../../ui/Segmented.tsx";
+import { scrollBehavior } from "../../ui/motion.ts";
 import { RegexToAutomata } from "./RegexToAutomata.tsx";
 import { AutomatonToRegex } from "./AutomatonToRegex.tsx";
 import { AUTOMATON_EXAMPLES, REGEX_EXAMPLES } from "./examples.ts";
 import "./convert.css";
 
-/** What was typed in one direction: the alphabet and the regex or automaton. */
+/** What was typed in one direction. */
 export interface Draft { alphabet: string; text: string }
 
 type Direction = "to-automata" | "to-regex";
@@ -17,11 +18,10 @@ export function ConvertView() {
   const [regex, setRegex] = useState<Draft>({ alphabet: "a b", text: REGEX_EXAMPLES[0] });
   const [automaton, setAutomaton] = useState<Draft>({ alphabet: "a b", text: AUTOMATON_EXAMPLES[0].text });
 
-  // "Convert this back" fills the other direction and switches to it, at the top of the page
+  // "Convert this back" fills the other direction and switches to it
   const switchTo = (next: Direction) => {
     setDir(next);
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+    window.scrollTo({ top: 0, behavior: scrollBehavior() });
   };
 
   const switcher = (

@@ -1,4 +1,3 @@
-/** The answer editor: a regular expression, or a DFA/NFA written one transition per line. */
 import { useId, useRef } from "react";
 import type { Dispatch } from "react";
 import type { Action, Derived, WorkbenchState } from "../../state/useWorkbench.ts";
@@ -7,12 +6,12 @@ import { SymbolKeys } from "../../ui/SymbolKeys.tsx";
 import { Segmented } from "../../ui/Segmented.tsx";
 import { AutomatonEditor } from "../../ui/AutomatonEditor.tsx";
 
-/** The answer editor and the Check button. */
+/** The answer (a regex, or a DFA/NFA one transition per line) and the Check button. */
 export function AnswerPanel({ state, derived, dispatch }: { state: WorkbenchState; derived: Derived; dispatch: Dispatch<Action> }) {
   const ids = { src: useId(), regex: useId(), help: useId(), err: useId() };
   const regexRef = useRef<HTMLInputElement>(null);
 
-  // errors belong to the text that was checked; once it is edited they no longer point at the right place
+  // errors point into the checked text, so they hide once it is edited
   const error = derived.result && !derived.result.ok && !derived.stale ? derived.result.error : null;
   const noLanguage = !derived.language;
   const check = () => dispatch({ type: "check" });

@@ -45,7 +45,7 @@ export function Definition({ alphabet, text }: { alphabet: string[]; text: strin
   return (
     <span className="math">
       <i>L</i> <span className="m-op">=</span> {"{ "}<i>w</i> <span className="m-op">∈</span> {"{"}{alphabet.join(", ")}{"}"}<sup>∗</sup>
-      <span className="m-colon"> : </span><TypesetSpec text={text.trim()} />{" }"}
+      {" : "}<TypesetSpec text={text.trim()} />{" }"}
     </span>
   );
 }

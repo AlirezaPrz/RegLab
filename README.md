@@ -41,7 +41,8 @@ src/
     check/      the regular-languages tool (#/regular; #/check still works); StuckSection is the hints
     convert/    the regex ⇄ automata converter (#/convert)
   diagram/      dagre layout (layout.ts) and the SVG / table renderer
-  ui/           small shared pieces: symbol keys, the automaton editor, field errors, typeset notation, icons
+  ui/           shared pieces: the alphabet field, automaton editor, sample strings, symbol keys,
+                field errors, typeset notation, icons
   styles/       tokens.css (light and dark themes) and app.css
 src/assets/fonts/  a subset of STIX Two Math for operators (SIL OFL 1.1, licence alongside)
 test.js         engine tests

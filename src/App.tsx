@@ -1,15 +1,11 @@
-/** The app shell: the header, the page router (URL hash) and the light/dark theme. */
+/** The app shell: header, hash router and theme. */
 import { useEffect, useState, type ComponentType } from "react";
 import { CheckView } from "./features/check/CheckView.tsx";
 import { ConvertView } from "./features/convert/ConvertView.tsx";
 import { HomeView } from "./features/home/HomeView.tsx";
 import { Icon } from "./ui/Icon.tsx";
 
-/**
- * Pages, in header order. The first is the landing page. Each tool gets its own entry named for
- * what it covers (later: "Context-free grammars", "Pushdown automata", ...), so the header reads
- * as a map of the course rather than a list of generic "checkers".
- */
+/** Pages in header order; the first is the landing page. Tools are named for the topic they cover. */
 const VIEWS: { id: string; nav: string; title: string; Component: ComponentType; ownHeading?: boolean; aliases?: string[] }[] = [
   { id: "", nav: "About", title: "A workbench for the theory of computation", Component: HomeView, ownHeading: true },
   { id: "regular", nav: "Regular Languages", title: "Regular Languages: check an answer", Component: CheckView, aliases: ["check"] },
@@ -18,16 +14,15 @@ const VIEWS: { id: string; nav: string; title: string; Component: ComponentType;
 
 const hrefOf = (id: string) => (id ? `#/${id}` : "#/");
 
-/** A header label, with arrows set in the math font so they match the notation everywhere else. */
+/** Sets arrows in the math font. One wrapping span keeps the flex link from trimming the spaces around them. */
 const navLabel = (text: string) =>
-  // one span, so the link's flex layout keeps the spaces around the arrow
   <span>{text.split(/([⇄→])/).map((part, i) => (i % 2 ? <span key={i} className="math">{part}</span> : part))}</span>;
 
 type Theme = "auto" | "light" | "dark";
 const NEXT: Record<Theme, Theme> = { auto: "light", light: "dark", dark: "auto" };
 const THEME_LABEL: Record<Theme, string> = { auto: "Theme: match system", light: "Theme: light", dark: "Theme: dark" };
 
-/** The theme choice, applied as data-theme on <html> and remembered in localStorage (index.html applies it before first paint). */
+/** The theme, as data-theme on <html>, remembered in localStorage (index.html applies it before first paint). */
 function useTheme(): [Theme, () => void] {
   const [theme, setTheme] = useState<Theme>(() => {
     try { const t = localStorage.getItem("reglab-theme"); return t === "light" || t === "dark" ? t : "auto"; } catch { return "auto"; }
@@ -45,7 +40,7 @@ function readView() {
   return VIEWS.find((v) => v.id === id || v.aliases?.includes(id)) ?? VIEWS[0];
 }
 
-/** The current page, from the URL hash. Hash routing keeps the site static, so it works on GitHub Pages. */
+/** The page from the URL hash; hash routing keeps the site static for GitHub Pages. */
 function useHashView() {
   const [view, setView] = useState(readView);
   useEffect(() => {
@@ -60,13 +55,12 @@ function useHashView() {
   return view;
 }
 
-/** The root component. */
 export function App() {
   const [theme, cycleTheme] = useTheme();
   const view = useHashView();
   const { Component } = view;
   return (
-    <div className={"view-" + (view.id || "home")}>
+    <>
       <a className="skip" href="#main" onClick={(e) => { e.preventDefault(); document.getElementById("main")?.focus(); }}>Skip to content</a>
       <header className="topbar">
         <div className="topbar-inner">
@@ -85,6 +79,6 @@ export function App() {
         {!view.ownHeading && <h1 className="sr-only">{view.title}</h1>}
         <Component key={view.id} />
       </main>
-    </div>
+    </>
   );
 }

@@ -1,8 +1,8 @@
-/** Errors shown next to the input they belong to, with the problem marked in the typed text. */
+/** Errors shown under the input they belong to. */
 import type { InputError } from "../engine/index.ts";
 import { Icon } from "./Icon.tsx";
 
-/** Focus a text field and select [from, to). */
+/** Focuses a field and selects [from, to). */
 export function selectInInput(el: HTMLInputElement | HTMLTextAreaElement | null, from: number, to: number) {
   if (!el) return;
   el.focus();

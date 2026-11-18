@@ -1,7 +1,4 @@
-/**
- * Positions an automaton for drawing: a model in, plain geometry out. The renderer never sees
- * the layout library (dagre), so it could be replaced in this one file.
- */
+/** Positions an automaton for drawing: model in, plain geometry out. dagre stays confined to this file. */
 import dagre from "@dagrejs/dagre";
 import type { AutomatonModel } from "../engine/index.ts";
 
@@ -75,7 +72,7 @@ export function layoutAutomaton(m: AutomatonModel, dir: Direction = "LR"): Layou
 
   const loops = new Set(m.edges.filter((e) => e.from === e.to).map((e) => e.from));
   const loopLabelW = new Map(m.edges.filter((e) => e.from === e.to).map((e) => [e.from, labelWidth(e.symbols.join(","))]));
-  // A state with a self-loop reserves room for the loop and its label above it (LR) / beside it (TB).
+  // a state with a self-loop reserves room for it above (LR) or beside (TB)
   m.names.forEach((_, i) => {
     const extra = loops.has(i) ? LOOP + LABEL_H : 0;
     const w = dir === "LR" ? Math.max(2 * R, loopLabelW.get(i) ?? 0) : 2 * R + 2 * extra;
@@ -86,8 +83,7 @@ export function layoutAutomaton(m: AutomatonModel, dir: Direction = "LR"): Layou
   g.setNode("start", { width: 2, height: 2 });
   g.setEdge("start", String(m.start), { minlen: 1, weight: 4, width: 0, height: 0 }, "start");
 
-  // Edges on shortest paths from the start form a spanning tree; weighting it keeps that
-  // backbone straight and lets the remaining edges route around it.
+  // weighting the shortest-path spanning tree keeps that backbone straight; other edges route around it
   const depth = new Map<number, number>([[m.start, 0]]);
   const tree = new Set<number>();
   for (const q = [m.start]; q.length;) {

@@ -1,8 +1,7 @@
-/** The table view of an automaton, the accessible alternative to the diagram. */
 import type { AutomatonModel } from "../engine/index.ts";
 import { StateMark } from "../ui/StateMark.tsx";
 
-/** Rows are states (marked as start or accepting the way the diagram draws them), columns are symbols with ε last. */
+/** The table view of an automaton, the accessible alternative to the diagram. Columns are symbols, ε last. */
 export function TransitionTable({ model, caption, active }: { model: AutomatonModel; caption: string; active?: ReadonlySet<number> }) {
   const symbols: string[] = [];
   for (const e of model.edges) for (const s of e.symbols) if (!symbols.includes(s)) symbols.push(s);

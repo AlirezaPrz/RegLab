@@ -1,7 +1,7 @@
-/* Design tokens (colour, type, spacing, radii) for light and dark themes. Every other stylesheet uses these. */
+/* Design tokens for light and dark themes. Every other stylesheet uses these. */
 
-/* Math operators (∈ ∉ ≠ ∗ ≥ ≤ ∅ …) from a subset of STIX Two Math, SIL OFL 1.1: see src/assets/fonts/OFL.txt.
-   Renamed because it is a modified (subset) version. */
+/* Math operators (∈ ∉ ≠ ∗ ≥ ≤ ∅ …): a subset of STIX Two Math under the SIL OFL 1.1 (src/assets/fonts/OFL.txt),
+   renamed because it is modified. */
 @font-face {
   font-family: "RegLab Math";
   src: url("../assets/fonts/reglab-math.woff") format("woff");
@@ -62,7 +62,7 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Dark values appear twice: once for the system setting (unless the toggle forces light), once for the toggle. */
+/* Dark values appear twice: for the system setting (unless forced light) and for the toggle. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;

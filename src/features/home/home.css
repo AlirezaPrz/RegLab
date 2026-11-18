@@ -1,4 +1,4 @@
-/* Landing page: a launcher for the tools, in the typeset-notation world (tokens only). */
+/* The landing page. Values come from tokens.css. */
 
 .home { --wrap: 1240px; }
 .home > section, .home > footer { max-width: var(--wrap); margin: 0 auto; padding-left: 24px; padding-right: 24px; }
@@ -41,7 +41,7 @@
 .result-note { margin: var(--space-5) 0 0; font-size: var(--step-0); line-height: 1.6; color: var(--ink-2); max-width: 58ch; }
 .result-note a { color: var(--accent); font-weight: 600; text-underline-offset: 3px; }
 
-/* walkthrough: steps scroll on the left while a pinned mini tool highlights what each step describes */
+/* walkthrough: steps scroll on the left while a pinned mini tool highlights each one */
 .how { padding-bottom: clamp(56px, 8vw, 104px); }
 .how-h { margin: 0 0 var(--space-6); font: 600 clamp(2rem, 1.4rem + 2.2vw, 3.25rem)/1.05 var(--font-math); letter-spacing: -0.02em; }
 .how-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--space-7); align-items: start; }
@@ -61,7 +61,7 @@
   display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--space-3);
   padding: var(--space-4); border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--paper);
 }
-/* the active parts are outlined and tinted; the rest stay at full contrast so every word stays readable */
+/* active parts are outlined and tinted; the rest keep full contrast */
 .stage-part { min-width: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--rule); border-radius: var(--radius-sm); transition: border-color 300ms var(--ease-out), background-color 300ms var(--ease-out); }
 .stage-lang, .stage-verdict { grid-column: 1 / -1; }
 .stage-lang { background: var(--band); }

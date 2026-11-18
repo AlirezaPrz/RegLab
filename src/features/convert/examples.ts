@@ -1,4 +1,4 @@
-/** Examples offered by the converter, one list per direction; the first of each is the default. All are over {a, b}. */
+/** The converter's examples, over {a, b}; the first of each list is the default. */
 
 export const REGEX_EXAMPLES = ["(a+b)*aa", "a*b*", "(ab+ba)*", "(a+b)*a(a+b)(a+b)", "b*(ab*ab*)*"];
 

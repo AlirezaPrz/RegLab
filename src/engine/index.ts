@@ -1,3 +1,3 @@
-/** The engine's public API: automata algorithms (engine.ts) and the study-session layer the UI uses (check.ts). */
+/** The engine's public API: the automata algorithms and the study layer the UI uses. */
 export * from "./engine.ts";
 export * from "./check.ts";

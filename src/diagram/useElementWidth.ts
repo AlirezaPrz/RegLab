@@ -1,7 +1,6 @@
-/** Measures an element's width so diagrams can scale to fit it. */
 import { useCallback, useState } from "react";
 
-/** A callback ref and the element's current width (0 until measured), kept up to date with a ResizeObserver. */
+/** A callback ref and the element's width (0 until measured), kept current by a ResizeObserver. */
 export function useElementWidth<T extends HTMLElement>(): [(el: T | null) => void, number] {
   const [width, setWidth] = useState(0);
   const ref = useCallback((el: T | null) => {

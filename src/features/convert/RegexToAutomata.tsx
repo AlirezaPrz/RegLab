@@ -1,11 +1,12 @@
-/** Regex → automata: a regular expression, then the NFA built from it, the subset-construction DFA, and the smallest DFA. */
+/** Regex → automata: the NFA built from a regex, the DFA the subset construction makes from it, and the smallest DFA. */
 import { Fragment, useId, useRef, useState, type ReactNode } from "react";
 import { automatonText, convertRegex, type AutomatonModel, type RegexConversion } from "../../engine/index.ts";
 import { Diagram, DRAW_LIMIT } from "../../diagram/LazyDiagram.tsx";
 import { TransitionTable } from "../../diagram/TransitionTable.tsx";
 import { FieldError, selectInInput } from "../../ui/FieldError.tsx";
 import { SymbolKeys } from "../../ui/SymbolKeys.tsx";
-import { StringToken } from "../../ui/StringToken.tsx";
+import { AlphabetField } from "../../ui/AlphabetField.tsx";
+import { SampleStrings } from "../../ui/SampleStrings.tsx";
 import { TypesetRegex } from "../../ui/Typeset.tsx";
 import { CopyButton } from "../../ui/CopyButton.tsx";
 import { MergeTable } from "../../ui/MergeTable.tsx";
@@ -21,7 +22,7 @@ const STEPS: { id: Step; name: string }[] = [
   { id: "minimal", name: "Smallest DFA" },
 ];
 
-/** How each automaton was made, in a sentence or two. */
+/** How each automaton was made. */
 function caption(step: Step, c: RegexConversion): ReactNode {
   if (step === "nfa") return <>Built from <i className="math">R</i> piece by piece: each symbol is two states joined by that symbol, and union, concatenation and star are wired together with ε-moves.</>;
   if (step === "dfa") return <>The subset construction on the NFA: each DFA state is the set of NFA states the NFA could be in after the same input. A set is accepting when it contains an accepting NFA state (in bold).{c.dfa.names.includes("∅") && <> ∅ is the empty set, a dead state: once there, nothing is accepted.</>}</>;
@@ -35,11 +36,10 @@ export function RegexToAutomata({ switcher, draft, onChange, onConvertBack }: {
   switcher: ReactNode;
   draft: Draft;
   onChange: (d: Draft) => void;
-  /** convert an automaton shown here back to a regex, in the other direction */
+  /** hands an automaton shown here to the other direction */
   onConvertBack: (automaton: string) => void;
 }) {
-  const ids = { alpha: useId(), rx: useId(), help: useId(), err: useId(), alphaErr: useId(), out: useId(), tabs: useId() };
-  const alphaRef = useRef<HTMLInputElement>(null);
+  const ids = { rx: useId(), help: useId(), err: useId(), out: useId(), tabs: useId() };
   const rxRef = useRef<HTMLInputElement>(null);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [step, setStep] = useState<Step>("nfa");
@@ -59,19 +59,9 @@ export function RegexToAutomata({ switcher, draft, onChange, onConvertBack }: {
     <>
       <section className="band" aria-label="The regular expression">
         <div className="band-inner">
-          <div className="band-inputs">
+          <div>
             {switcher}
-            <div className="row">
-              <div className="field field-narrow">
-                <label htmlFor={ids.alpha}>Alphabet Σ</label>
-                <input id={ids.alpha} ref={alphaRef} className="mono" type="text" value={draft.alphabet}
-                  spellCheck={false} autoComplete="off" autoCapitalize="off"
-                  aria-invalid={!!alphaErr} aria-describedby={alphaErr ? ids.alphaErr : undefined}
-                  onChange={(e) => onChange({ ...draft, alphabet: e.target.value })} />
-              </div>
-            </div>
-            {alphaErr && <FieldError id={ids.alphaErr} error={alphaErr} source={draft.alphabet}
-              onLocate={() => selectInInput(alphaRef.current, alphaErr.from ?? 0, alphaErr.to ?? 0)} />}
+            <AlphabetField value={draft.alphabet} error={alphaErr} onChange={(alphabet) => onChange({ ...draft, alphabet })} />
             <div className="field">
               <label htmlFor={ids.rx}>Regular expression <i className="math">R</i></label>
               <input id={ids.rx} ref={rxRef} className="mono input-lg" type="text" value={draft.text} placeholder="(a+b)*aa"
@@ -100,12 +90,7 @@ export function RegexToAutomata({ switcher, draft, onChange, onConvertBack }: {
               <div className={stale ? "is-stale" : undefined}>
                 <p className="definition"><span className="math"><i>R</i> <span className="m-op">=</span> <TypesetRegex text={input} /></span></p>
                 {stale && <p className="help">The last expression that could be read.</p>}
-                <dl className="samples">
-                  <dt>In <i className="math">L</i>(<i className="math">R</i>)</dt>
-                  <dd>{c.samples.yes.length ? c.samples.yes.map((w) => <StringToken key={w} value={w} />) : <span className="muted">no strings at all</span>}</dd>
-                  <dt>Not in <i className="math">L</i>(<i className="math">R</i>)</dt>
-                  <dd>{c.samples.no.length ? c.samples.no.map((w) => <StringToken key={w} value={w} />) : <span className="muted">none: every string is in the language</span>}</dd>
-                </dl>
+                <SampleStrings samples={c.samples} of={<><i className="math">L</i>(<i className="math">R</i>)</>} />
               </div>
             ) : (
               <p className="definition definition-empty"><span className="math"><i>R</i> <span className="m-op">=</span> ?</span></p>
@@ -139,10 +124,10 @@ export function RegexToAutomata({ switcher, draft, onChange, onConvertBack }: {
               ))}
             </div>
 
-            <div role="tabpanel" id={`${ids.tabs}-panel`} aria-labelledby={`${ids.tabs}-${step}`} className="out-panel">
+            <div role="tabpanel" id={`${ids.tabs}-panel`} aria-labelledby={`${ids.tabs}-${step}`}>
               <p className="out-caption">{caption(step, c)}</p>
               <div className={"figure" + (step !== "nfa" ? " has-aside" : "")}>
-                <div className="out-diagram">
+                <div>
                   {model!.names.length <= DRAW_LIMIT
                     ? <Diagram key={step} model={model!} title={`${STEPS.find((s) => s.id === step)!.name} for R`} dimmed={stale} />
                     : <>
