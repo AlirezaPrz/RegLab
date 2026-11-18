@@ -5,10 +5,8 @@
 
 /* the statement */
 .home-hero { padding-top: clamp(56px, 9vw, 120px); padding-bottom: clamp(40px, 6vw, 72px); }
-.home-title { margin: 0; font: 600 clamp(2.5rem, 1.6rem + 3.6vw, 5rem)/1.04 var(--font-math); letter-spacing: -0.025em; max-width: 16em; text-wrap: balance; }
+.home-title { margin: 0; font: 600 clamp(2rem, 0.6rem + 5vw, 5rem)/1.04 var(--font-math); letter-spacing: -0.025em; max-width: 16em; text-wrap: balance; }
 .home-lede { margin: var(--space-5) 0 0; font-size: var(--step-1); line-height: 1.6; color: var(--ink-2); max-width: 60ch; }
-.home-cta { display: inline-block; margin-top: var(--space-6); padding: 12px 22px; border-radius: var(--radius); background: var(--accent); color: var(--accent-ink); font-weight: 650; text-decoration: none; transition: background-color 120ms; }
-.home-cta:hover { background: color-mix(in oklab, var(--accent) 86%, var(--ink)); }
 
 /* the tools: one tile each, with a live engine-drawn example */
 .home-tools { padding-bottom: clamp(56px, 8vw, 104px); }
@@ -52,7 +50,7 @@
 .how-steps > li:first-child { padding-top: 8svh; }
 .how-steps > li:last-child { min-height: 60svh; }
 .how-steps > li.is-current { color: var(--ink-2); }
-.how-steps p { margin: var(--space-3) 0 0; font-size: var(--step-1); line-height: 1.6; max-width: 40ch; }
+.how-steps p { margin: var(--space-3) 0 0; font-size: var(--step-1); line-height: 1.6; max-width: 40ch; text-wrap: pretty; }
 .how-step-title { display: flex; align-items: baseline; gap: var(--space-3); margin: 0; font: 600 clamp(1.5rem, 1.2rem + 1vw, 2rem)/1.2 var(--font-math); letter-spacing: -0.015em; color: inherit; }
 .how-steps > li.is-current .how-step-title { color: var(--ink); }
 .how-step-n { flex: none; display: grid; place-items: center; width: 1.6em; height: 1.6em; border-radius: 50%; border: 1.5px solid currentColor; font-size: 0.6em; font-family: var(--font-ui); }

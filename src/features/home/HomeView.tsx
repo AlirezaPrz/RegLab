@@ -44,7 +44,6 @@ export function HomeView() {
           Write an answer and RegLab tells you whether it is right. When it is not, you get the exact string where it breaks
           and why. No account and no setup.
         </p>
-        <a className="home-cta" href="#/regular">Open Regular Languages</a>
       </section>
 
       <section className="home-tools" aria-labelledby="tools-h">

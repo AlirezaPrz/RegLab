@@ -184,9 +184,9 @@ export function StuckSection({ state, hints, dispatch }: { state: WorkbenchState
   ];
 
   return (
-    <section className="stuck" aria-labelledby={headingId}>
+    <section id="stuck" className="stuck" aria-labelledby={headingId}>
       <div className="out">
-        <h2 id={headingId} className="h-section">Stuck?</h2>
+        <h2 id={headingId} className="h-section" tabIndex={-1}>Stuck?</h2>
         <p className="out-caption">Each hint gives away a little more. Open them only as far as you need.</p>
         <ol className="ladder" aria-label="Hints, in order">
           {rungs.map((r) => {
@@ -205,10 +205,10 @@ export function StuckSection({ state, hints, dispatch }: { state: WorkbenchState
                     )}
                     {isNext && r.step === 3 && confirming && (
                       <div className="confirm" role="group" aria-label="Confirm showing the solution">
-                        <p><strong>This shows a complete answer.</strong> You won't be able to work it out yourself afterwards. Show it?</p>
+                        <p><strong>This shows a complete answer.</strong> Once you have seen it, this example stops being practice.</p>
                         <div className="hint-actions">
                           <button type="button" className="btn-quiet btn-warn" onClick={() => { setConfirming(false); open(3); }}>Show the solution</button>
-                          <button type="button" className="btn-quiet" autoFocus onClick={() => setConfirming(false)}>Not yet</button>
+                          <button type="button" className="btn-quiet" autoFocus onClick={() => setConfirming(false)}>Keep trying</button>
                         </div>
                       </div>
                     )}

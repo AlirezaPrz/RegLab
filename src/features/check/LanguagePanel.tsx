@@ -61,6 +61,15 @@ export function LanguagePanel({ state, derived, dispatch, onTry }: {
           </div>
 
           {mode === "examples" ? (
+            <>
+            {/* phones get a compact list instead of the cards, so the definition and the answer stay near the top */}
+            <div className="examples-select field">
+              <label htmlFor={ids.ex + "-select"} className="sr-only">Example language</label>
+              <select id={ids.ex + "-select"} value={state.example === "own" ? "" : state.example}
+                onChange={(e) => dispatch({ type: "example", value: Number(e.target.value) })}>
+                {EXAMPLES.map((ex, i) => <option key={i} value={i}>{ex.name}</option>)}
+              </select>
+            </div>
             <fieldset className="examples">
               <legend className="sr-only">Example languages</legend>
               {EXAMPLES.map((ex, i) => (
@@ -70,12 +79,13 @@ export function LanguagePanel({ state, derived, dispatch, onTry }: {
                   <span className="example-name">{ex.name}</span>
                 </label>
               ))}
-              <p className="help examples-note">The selected language is written out on the right, with strings that are and aren't in it.</p>
-              <div className="examples-foot">
-                <button type="button" className="btn-quiet" onClick={() => dispatch({ type: "mode", value: "own" })}>Edit this one</button>
-                <button type="button" className="linkish-quiet" onClick={() => dispatch({ type: "blank" })}>Start from blank</button>
-              </div>
             </fieldset>
+            <p className="help examples-note">The selected language is written out in course notation, with strings that are and aren't in it.</p>
+            <div className="examples-foot">
+              <button type="button" className="btn-quiet" onClick={() => dispatch({ type: "mode", value: "own" })}>Edit this one</button>
+              <button type="button" className="linkish-quiet" onClick={() => dispatch({ type: "blank" })}>Start from blank</button>
+            </div>
+            </>
           ) : (
             <>
               <div className="row">

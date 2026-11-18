@@ -154,7 +154,8 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px
 .pinned {
   position: fixed; inset: 0 0 auto; z-index: 20;
   display: flex; align-items: center; gap: var(--space-3);
-  padding: 8px 24px; background: var(--band); border-bottom: 1px solid var(--band-rule);
+  /* lines up with the page content, which is 1240px wide at most */
+  padding: 8px max(24px, calc((100% - 1240px) / 2 + 24px)); background: var(--band); border-bottom: 1px solid var(--band-rule);
   transform: translateY(-100%); visibility: hidden;
   transition: transform 220ms var(--ease-out), visibility 0s 220ms;
 }
@@ -262,7 +263,8 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px
 
 /* hints (Stuck?): a ladder read top to bottom, set apart from the work area by its own tone */
 .stuck { background: var(--band); }
-.stuck .tok { background: var(--paper); }
+/* static strings on a tinted surface sit on paper, so every sample string reads as the same chip */
+.band .tok:not(.tok-btn), .stage-lang .tok, .stuck .tok { background: var(--paper); }
 .stuck .d-label-bg { fill: var(--band); }
 .ladder { list-style: none; margin: var(--space-6) 0 0; padding: 0; display: grid; gap: var(--space-7); }
 .rung { min-width: 0; scroll-margin-top: 80px; }
@@ -336,8 +338,8 @@ a.btn-quiet { text-decoration: none; display: inline-block; }
 .example.is-on { border-color: var(--accent); background: var(--accent-soft); }
 .example.is-on .example-name { font-weight: 600; }
 .example:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
-.examples-note, .examples-foot { grid-column: 1 / -1; }
-.examples-note { margin-top: var(--space-2); }
+.examples-note { margin-top: var(--space-3); }
+.examples-select { display: none; margin: 0; }
 .examples-foot { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; margin-top: var(--space-1); }
 .linkish-quiet { padding: 0; border: 0; background: none; color: var(--ink-2); font-size: var(--step-sm); text-decoration: underline; text-underline-offset: 3px; }
 .linkish-quiet:hover { color: var(--ink); }
@@ -392,4 +394,22 @@ a.btn-quiet { text-decoration: none; display: inline-block; }
   .pipeline-step { flex: 1 1 0; padding: 8px 10px; }
   .pipeline-name { font-size: var(--step-0); }
   .pipeline-arrow { font-size: var(--step-1); }
+}
+
+/* the way from a wrong answer to the hints */
+.verdict-next { margin: var(--space-4) 0 0; }
+
+/* in result figures a diagram sits at the left edge, with its view buttons right above it */
+.figure .diagram-svg, .rung-figure .diagram-svg { margin: 0; }
+.figure .diagram-tools, .rung-figure .diagram-tools { justify-content: flex-start; }
+
+/* keyboard shortcuts mean nothing on a touch screen */
+@media (hover: none) and (pointer: coarse) {
+  .kbd-hint { display: none; }
+}
+
+@media (max-width: 640px) {
+  /* the example cards would fill a phone's first screen: a compact list instead */
+  .examples { display: none; }
+  .examples-select { display: block; }
 }

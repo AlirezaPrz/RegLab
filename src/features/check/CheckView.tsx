@@ -47,7 +47,9 @@ export function CheckView() {
   const model = answer && answer.kind !== "regex" ? answer.model : null;
   const steps = derived.probe?.path ?? null;
   const stepIdx = derived.activeStep;
-  const active = useMemo(() => (steps && stepIdx !== null ? new Set(steps[stepIdx].states) : undefined), [steps, stepIdx]);
+  // the trace shows on the diagram only once a string has been typed or a step picked, so an empty box marks nothing
+  const tracing = state.probe.trim() !== "" || state.step !== null;
+  const active = useMemo(() => (tracing && steps && stepIdx !== null ? new Set(steps[stepIdx].states) : undefined), [tracing, steps, stepIdx]);
   const marked = fb?.conflated?.studentState ?? null;
   // the drawing beside the editor: the checked answer while it is current, so marks and traces line
   // up with it; otherwise the automaton as far as it has been written
@@ -85,6 +87,15 @@ export function CheckView() {
           <div aria-live="polite" aria-atomic="false">
             <FeedbackPanel derived={derived} onTry={onTry} />
           </div>
+          {fb && !fb.correct && !derived.stale && derived.hints && (
+            <p className="verdict-next">
+              <button type="button" className="btn-quiet" onClick={() => {
+                const h = document.querySelector<HTMLElement>("#stuck h2");
+                h?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
+                h?.focus({ preventScroll: true });
+              }}>Stuck? Get a hint ↓</button>
+            </p>
+          )}
           {drawing && (
             <div className="answer-diagram">
               <h3 className="h-sub">{drawing.title}</h3>
@@ -102,7 +113,7 @@ export function CheckView() {
             </div>
           )}
           {!drawing && draft && <p className="help answer-diagram">Add a <code>start:</code> line to see a drawing of your automaton.</p>}
-          <ProbePanel ref={probeRef} state={state} probe={derived.probe} activeStep={stepIdx} model={derived.stale ? null : model}
+          <ProbePanel ref={probeRef} state={state} probe={derived.probe} activeStep={tracing ? stepIdx : null} model={derived.stale ? null : model}
             kind={answer && !derived.stale ? answer.kind : null} dispatch={dispatch} />
         </section>
       </div>
