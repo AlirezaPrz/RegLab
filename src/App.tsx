@@ -1,6 +1,7 @@
 /** The app shell: the header, the page router (URL hash) and the light/dark theme. */
 import { useEffect, useState, type ComponentType } from "react";
 import { CheckView } from "./features/check/CheckView.tsx";
+import { ConvertView } from "./features/convert/ConvertView.tsx";
 import { HomeView } from "./features/home/HomeView.tsx";
 import { Icon } from "./ui/Icon.tsx";
 
@@ -12,9 +13,15 @@ import { Icon } from "./ui/Icon.tsx";
 const VIEWS: { id: string; nav: string; title: string; Component: ComponentType; ownHeading?: boolean; aliases?: string[] }[] = [
   { id: "", nav: "About", title: "A workbench for the theory of computation", Component: HomeView, ownHeading: true },
   { id: "regular", nav: "Regular languages", title: "Regular languages: check an answer", Component: CheckView, aliases: ["check"] },
+  { id: "convert", nav: "Regex ⇄ automata", title: "Regex ⇄ automata: convert between regular expressions and automata", Component: ConvertView },
 ];
 
 const hrefOf = (id: string) => (id ? `#/${id}` : "#/");
+
+/** A header label, with arrows set in the math font so they match the notation everywhere else. */
+const navLabel = (text: string) =>
+  // one span, so the link's flex layout keeps the spaces around the arrow
+  <span>{text.split(/([⇄→])/).map((part, i) => (i % 2 ? <span key={i} className="math">{part}</span> : part))}</span>;
 
 type Theme = "auto" | "light" | "dark";
 const NEXT: Record<Theme, Theme> = { auto: "light", light: "dark", dark: "auto" };
@@ -66,7 +73,7 @@ export function App() {
           <a className="wordmark" href={hrefOf("")} aria-label="RegLab, home"><span className="wordmark-mark" aria-hidden="true" />RegLab</a>
           <nav className="topnav" aria-label="Pages">
             {VIEWS.map((v) => (
-              <a key={v.id} href={hrefOf(v.id)} aria-current={v.id === view.id ? "page" : undefined}>{v.nav}</a>
+              <a key={v.id} href={hrefOf(v.id)} aria-current={v.id === view.id ? "page" : undefined}>{navLabel(v.nav)}</a>
             ))}
           </nav>
           <button type="button" className="tool theme-toggle" onClick={cycleTheme} aria-label={`${THEME_LABEL[theme]}. Change theme`} title={THEME_LABEL[theme]}>

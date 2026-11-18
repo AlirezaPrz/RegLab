@@ -4,8 +4,8 @@
  * only render these results; no automata logic lives in them.
  */
 import {
-  type DFA, type ParsedAutomaton,
-  regexToDfa, parseSpec, parseAutomaton, nfaToDfa, compare, minimize, dfaToRegex,
+  type DFA, type NFA, type ParsedAutomaton,
+  EPS, regexToDfa, regexToNfa, parseRegex, parseSpec, parseAutomaton, nfaToDfa, compare, minimize, dfaToRegex, nfaToRegex,
   accepts, trace, sampleStrings, nerodeClasses, parseAlphabet, EngineError,
 } from "./engine.ts";
 
@@ -230,10 +230,10 @@ export function probe(raw: string, lang: Language, ans: Answer | null): Probe {
 }
 
 
-/** A diagram model of a DFA with states named q0, q1, … */
-export function modelFromDfa(d: DFA): AutomatonModel {
+/** A diagram model of a DFA, with states named q0, q1, … unless `names` are given. */
+export function modelFromDfa(d: DFA, names = d.accept.map((_, i) => "q" + i)): AutomatonModel {
   return {
-    names: d.accept.map((_, i) => "q" + i),
+    names,
     start: d.start,
     accept: [...d.accept],
     edges: mergeEdges(d.delta.flatMap((row, s) => row.map((t, c) => ({ from: s, to: t, sym: d.alphabet[c] })))),
@@ -250,6 +250,16 @@ export function modelFromParsed(p: ParsedAutomaton): AutomatonModel {
   };
 }
 
+/** A diagram model of an NFA, ε-moves included. */
+function modelFromNfa(nfa: NFA, names: string[]): AutomatonModel {
+  const list: { from: number; to: number; sym: string }[] = [];
+  for (let s = 0; s < nfa.n; s++) {
+    for (const [sym, targets] of nfa.trans[s]) for (const to of targets) list.push({ from: s, to, sym });
+    for (const to of nfa.eps[s]) list.push({ from: s, to, sym: EPS });
+  }
+  return { names, start: nfa.start, accept: names.map((_, i) => nfa.accept.has(i)), edges: mergeEdges(list) };
+}
+
 function mergeEdges(list: { from: number; to: number; sym: string }[]): AutomatonModel["edges"] {
   const byPair = new Map<string, { from: number; to: number; symbols: string[] }>();
   for (const e of list) {
@@ -262,8 +272,97 @@ function mergeEdges(list: { from: number; to: number; sym: string }[]): Automato
 }
 
 
-/** Which input an error belongs to, so it can be shown next to that field. */
-export type Field = "alphabet" | "language" | "answer";
+/** What the regex → automata converter shows. */
+export interface RegexConversion {
+  /** the NFA built from the regex by induction on its structure (see regexToNfa), states q0, q1, … */
+  nfa: AutomatonModel;
+  /** the subset construction applied to that NFA, states A, B, … and ∅ for the empty set */
+  dfa: AutomatonModel;
+  /** subsets[i]: the NFA states that DFA state i stands for (empty for ∅) */
+  subsets: string[][];
+  /** the smallest DFA, states q0, q1, … */
+  minimal: AutomatonModel;
+  samples: { yes: string[]; no: string[] };
+}
+
+/** Converts a regular expression into an NFA, the DFA the subset construction makes from it, and the smallest DFA. */
+export function convertRegex(alphabetSrc: string, src: string): RegexConversion {
+  const alphabet = readAlphabet(alphabetSrc);
+  try {
+    const nfa = regexToNfa(parseRegex(src, alphabet), alphabet);
+    const nfaNames = Array.from({ length: nfa.n }, (_, i) => "q" + i);
+    const dfa = nfaToDfa(nfa);
+    const subsets = dfa.labels!.map((set) => set.map((i) => nfaNames[i]));
+    const min = minimize(dfa).dfa;
+    return {
+      nfa: modelFromNfa(nfa, nfaNames),
+      dfa: modelFromDfa(dfa, subsetNames(subsets)),
+      subsets,
+      minimal: modelFromDfa(min),
+      samples: { yes: sampleStrings(min, true, 7), no: sampleStrings(min, false, 7) },
+    };
+  } catch (e) { throw tag(e, "input"); }
+}
+
+/** Letters for the subset-construction states, in the order they were built (A … Z, then AA, AB, …), and ∅ for the empty set. */
+function subsetNames(subsets: string[][]): string[] {
+  let k = 0;
+  const letters = (i: number): string => (i < 26 ? "" : letters(Math.floor(i / 26) - 1)) + String.fromCharCode(65 + (i % 26));
+  return subsets.map((set) => (set.length ? letters(k++) : "∅"));
+}
+
+/** What the automaton → regex converter shows. */
+export interface AutomatonConversion {
+  /** the automaton as written */
+  model: AutomatonModel;
+  /** "nfa" when it has ε-moves or more than one move on a symbol */
+  kind: "dfa" | "nfa";
+  /** a regular expression for its language, by state elimination */
+  regex: string;
+  /** what the states were eliminated from: the automaton as written, or its smallest DFA when that gave a shorter expression */
+  eliminatedFrom: "automaton" | "smallest";
+  /** states in the smallest DFA */
+  minStates: number;
+  samples: { yes: string[]; no: string[] };
+}
+
+/** Converts an automaton written as transitions into a regular expression for its language. */
+export function convertAutomaton(alphabetSrc: string, src: string): AutomatonConversion {
+  const alphabet = readAlphabet(alphabetSrc);
+  try {
+    const parsed = parseAutomaton(src, alphabet);
+    const min = minimize(nfaToDfa(parsed.nfa)).dfa;
+    // eliminating from the student's own automaton gives an expression that follows it; the
+    // smallest DFA sometimes gives a shorter one. Ties go to the student's automaton.
+    const own = nfaToRegex(parsed.nfa), small = dfaToRegex(min);
+    return {
+      model: modelFromParsed(parsed),
+      kind: parsed.deterministic ? "dfa" : "nfa",
+      regex: small.length < own.length ? small : own,
+      eliminatedFrom: small.length < own.length ? "smallest" : "automaton",
+      minStates: min.n,
+      samples: { yes: sampleStrings(min, true, 7), no: sampleStrings(min, false, 7) },
+    };
+  } catch (e) { throw tag(e, "input"); }
+}
+
+/**
+ * Writes an automaton in the transition format parseAutomaton reads, so a converted automaton
+ * can be copied or converted back. States with no moves are left out unless they are the start.
+ */
+export function automatonText(m: AutomatonModel): string {
+  const used = new Set([m.start]);
+  for (const e of m.edges) { used.add(e.from); used.add(e.to); }
+  return [
+    `start: ${m.names[m.start]}`,
+    `accept: ${m.names.filter((_, i) => m.accept[i] && used.has(i)).join(" ")}`,
+    ...m.edges.map((e) => `${m.names[e.from]} ${e.symbols.join(",")} ${m.names[e.to]}`),
+  ].join("\n");
+}
+
+
+/** Which input an error belongs to, so it can be shown next to that field. "input" is the converter's regex or automaton. */
+export type Field = "alphabet" | "language" | "answer" | "input";
 
 /** An engine error as display data. from/to are a character range in the input; line is 1-based. */
 export interface InputError {
@@ -281,7 +380,7 @@ function tag(e: unknown, field: Field): EngineError & { field: Field } {
   return err;
 }
 
-/** Turn anything thrown by readLanguage/readAnswer into display data. */
+/** Turn anything thrown by readLanguage, readAnswer or the converters into display data. */
 export function toInputError(e: unknown, fallback: Field): InputError {
   const err = e as Partial<EngineError> & { field?: Field; message?: string };
   return { field: err.field ?? fallback, message: err.message ?? String(e), from: err.from, to: err.to, line: err.line };

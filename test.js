@@ -209,7 +209,7 @@ test("solution regex: hints carry the regex", () => {
   assert.strictEqual(R.hints(lang("#_a(w) = 1")).regex, "b*ab*");
 });
 
-// ------------------------------------------------- constructions for the converter
+// ------------------------------------------------- converters (check.ts)
 
 test("regex to NFA: built by induction, start state 0, same language", () => {
   const sizes = { "a": 2, "ε": 1, "∅": 1, "a+b": 5, "ab": 4, "a*": 3, "(a+b)*aa": 10, "(a+b)*a(a+b)(a+b)": 18 };
@@ -219,6 +219,31 @@ test("regex to NFA: built by induction, start state 0, same language", () => {
     assert.strictEqual(nfa.start, 0, src);
     assert(same(R.nfaToDfa(nfa), rx(src)), src);
   }
+});
+test("convertRegex: NFA, subset DFA and smallest DFA", () => {
+  const c = R.convertRegex("a b", "(a+b)*aa");
+  assert.strictEqual(c.nfa.names.length, 10);
+  assert(c.nfa.edges.some((e) => e.symbols.includes("ε")));
+  // the subset DFA names its states by letter, and each stands for a set of NFA states
+  assert.deepStrictEqual(c.dfa.names, ["A", "B", "C", "D"]);
+  assert.strictEqual(c.subsets.length, 4);
+  assert(c.subsets[0].includes("q0"));
+  assert.strictEqual(c.minimal.names.length, 3);
+  assert.deepStrictEqual(c.samples.yes.slice(0, 2), ["aa", "aaa"]);
+  // the empty set is drawn as ∅, a dead state
+  const d = R.convertRegex("a b", "ab");
+  assert(d.dfa.names.includes("∅"));
+  assert.deepStrictEqual(d.subsets[d.dfa.names.indexOf("∅")], []);
+});
+test("convertAutomaton: regex for the language, kind", () => {
+  const nfa = "start: q0\naccept: q2\nq0 a,b q0\nq0 a q1\nq1 b q2";
+  const c = R.convertAutomaton("a b", nfa);
+  assert.strictEqual(c.kind, "nfa");
+  assert.strictEqual(c.minStates, 3);
+  // eliminating from the NFA as written follows its structure
+  assert.strictEqual(c.regex, "(a+b)*ab");
+  assert.strictEqual(c.eliminatedFrom, "automaton");
+  assert.strictEqual(R.convertAutomaton("a b", "start: e\naccept: e\ne a o\no a e\ne b e\no b o").kind, "dfa");
 });
 test("nfaToRegex: exact on NFAs built from random expressions", () => {
   let seed = 11;
@@ -234,6 +259,15 @@ test("nfaToRegex: exact on NFAs built from random expressions", () => {
     const src = gen(3);
     assert(same(rx(R.nfaToRegex(R.regexToNfa(R.parseRegex(src, ab), ab))), rx(src)), src);
   }
+});
+test("converters: automatonText round-trips, and errors name the field", () => {
+  for (const src of ["(a+b)*a(a+b)(a+b)", "a*b*", "∅", "ε", "(ab+ba)*"]) {
+    const c = R.convertRegex("a b", src);
+    for (const m of [c.nfa, c.dfa, c.minimal]) assert(same(rx(R.convertAutomaton("a b", R.automatonText(m)).regex), rx(src)), src);
+  }
+  assert.throws(() => R.convertRegex("a b", "a+"), (e) => e.field === "input");
+  assert.throws(() => R.convertRegex("a (", "a"), (e) => e.field === "alphabet");
+  assert.throws(() => R.convertAutomaton("a b", "start: q0\nq0 c q0"), (e) => e.field === "input" && e.line === 2);
 });
 
 console.log(`\n${passed} passed`);

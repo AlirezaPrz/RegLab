@@ -290,7 +290,10 @@ a.btn-quiet { text-decoration: none; display: inline-block; }
   .work-hints .hints { margin-top: 0; }
 }
 @media (max-width: 640px) {
-  .topbar-inner { padding: 6px 12px 6px 16px; gap: var(--space-3); }
+  /* two rows: the name and theme on top, the pages below (scrolling sideways only on the narrowest phones) */
+  .topbar-inner { flex-wrap: wrap; row-gap: 0; padding: 6px 12px 2px 16px; gap: var(--space-3); }
+  .theme-toggle { order: 2; }
+  .topnav { order: 3; flex: 1 0 100%; margin-left: calc(-1 * var(--space-2)); overflow-x: auto; scrollbar-width: none; }
   .topnav a { padding: 0 var(--space-2); }
   .wordmark { font-size: var(--step-1); }
   .row .field, .row .field-narrow { flex: 1 1 100%; }
