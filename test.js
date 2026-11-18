@@ -209,4 +209,31 @@ test("solution regex: hints give the reference regex when there is one", () => {
   assert.strictEqual(R.hints(R.readLanguage("a b", "spec", "#_a(w) = 1")).regex, "b*ab*");
 });
 
+// ------------------------------------------------- constructions for the converter
+
+test("regex to NFA: built by induction, start state 0, same language", () => {
+  const sizes = { "a": 2, "ε": 1, "∅": 1, "a+b": 5, "ab": 4, "a*": 3, "(a+b)*aa": 10, "(a+b)*a(a+b)(a+b)": 18 };
+  for (const [src, n] of Object.entries(sizes)) {
+    const nfa = R.regexToNfa(R.parseRegex(src, ab), ab);
+    assert.strictEqual(nfa.n, n, src);
+    assert.strictEqual(nfa.start, 0, src);
+    assert(same(R.nfaToDfa(nfa), rx(src)), src);
+  }
+});
+test("nfaToRegex: exact on NFAs built from random expressions", () => {
+  let seed = 11;
+  const rnd = (n) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+  const gen = (d) => {
+    const k = d <= 0 ? rnd(3) : rnd(8);
+    if (k === 0) return "a"; if (k === 1) return "b"; if (k === 2) return rnd(4) ? "a" : "ε";
+    if (k <= 4) return `(${gen(d - 1)}+${gen(d - 1)})`;
+    if (k <= 6) return `${gen(d - 1)}${gen(d - 1)}`;
+    return `(${gen(d - 1)})*`;
+  };
+  for (let i = 0; i < 300; i++) {
+    const src = gen(3);
+    assert(same(rx(R.nfaToRegex(R.regexToNfa(R.parseRegex(src, ab), ab))), rx(src)), src);
+  }
+});
+
 console.log(`\n${passed} passed`);
