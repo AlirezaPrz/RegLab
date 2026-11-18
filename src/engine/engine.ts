@@ -401,6 +401,43 @@ export interface ParsedAutomaton {
   edges: { from: number; to: number; sym: string }[];
 }
 
+/** What one line of an automaton says, or why it can't be read. */
+export type AutomatonLine =
+  | { t: "start"; name: string }
+  | { t: "accept"; names: string[] }
+  | { t: "move"; from: string; symbols: string[]; to: string }
+  | { t: "error"; message: string };
+
+/**
+ * Reads an automaton line by line (1-based), skipping blank lines and comments (// or %). Both the
+ * checker, which stops at the first bad line, and the drawing made while typing, which skips bad
+ * lines, read lines this way.
+ */
+export function readAutomatonLines(src: string, alphabet: readonly string[]): { line: number; read: AutomatonLine }[] {
+  const out: { line: number; read: AutomatonLine }[] = [];
+  src.split("\n").forEach((raw, ln) => {
+    const line = raw.replace(/(\/\/|%).*$/, "").trim();
+    if (line) out.push({ line: ln + 1, read: readLine(line) });
+  });
+  return out;
+
+  function readLine(line: string): AutomatonLine {
+    let m: RegExpMatchArray | null;
+    if ((m = line.match(/^(start|initial)\s*[:=]\s*(\S+)$/i))) return { t: "start", name: m[2] };
+    if ((m = line.match(/^(accept|accepting|final)\s*[:=]\s*(.*)$/i))) return { t: "accept", names: m[2].split(/[\s,]+/).filter(Boolean) };
+    const parts = line.replace(/->|→/g, " ").split(/\s+/);
+    if (parts.length !== 3) return { t: "error", message: `expected "state symbol state", for example "q0 a q1".` };
+    const [from, syms, to] = parts;
+    const symbols: string[] = [];
+    for (let sym of syms.split(",").filter(Boolean)) {
+      if (/^(eps|epsilon|ϵ|λ)$/i.test(sym)) sym = EPS;
+      if (sym !== EPS && !alphabet.includes(sym)) return { t: "error", message: `"${sym}" is not in the alphabet {${alphabet.join(", ")}}.` };
+      symbols.push(sym);
+    }
+    return { t: "move", from, symbols, to };
+  }
+}
+
 /**
  * Parses an automaton written one line at a time; // and % start comments:
  *     start: q0
@@ -416,27 +453,14 @@ export function parseAutomaton(src: string, alphabet: readonly string[]): Parsed
   let start: string | null = null;
   const accept: string[] = [], acceptLine = new Map<string, number>();
   const edges: { from: string; sym: string; to: string }[] = [];
-  src.split("\n").forEach((raw, ln) => {
-    const line = raw.replace(/(\/\/|%).*$/, "").trim();
-    if (!line) return;
-    const where = `Line ${ln + 1}: `;
-    let m: RegExpMatchArray | null;
-    if ((m = line.match(/^(start|initial)\s*[:=]\s*(\S+)$/i))) { start = m[2]; return; }
-    if ((m = line.match(/^(accept|accepting|final)\s*[:=]\s*(.*)$/i))) {
-      const list = m[2].split(/[\s,]+/).filter(Boolean);
-      for (const a of list) if (!acceptLine.has(a)) acceptLine.set(a, ln + 1);
-      accept.push(...list);
-      return;
-    }
-    const parts = line.replace(/->|→/g, " ").split(/\s+/);
-    if (parts.length !== 3) throw new EngineError(where + `expected "state symbol state", for example "q0 a q1".`, { line: ln + 1 });
-    const [from, syms, to] = parts;
-    for (let sym of syms.split(",").filter(Boolean)) {
-      if (/^(eps|epsilon|ϵ|λ)$/i.test(sym)) sym = EPS;
-      if (sym !== EPS && !alphabet.includes(sym)) throw new EngineError(where + `"${sym}" is not in the alphabet {${alphabet.join(", ")}}.`, { line: ln + 1 });
-      edges.push({ from, sym, to });
-    }
-  });
+  for (const { line, read } of readAutomatonLines(src, alphabet)) {
+    if (read.t === "error") throw new EngineError(`Line ${line}: ${read.message}`, { line });
+    if (read.t === "start") start = read.name;
+    else if (read.t === "accept") {
+      for (const a of read.names) if (!acceptLine.has(a)) acceptLine.set(a, line);
+      accept.push(...read.names);
+    } else for (const sym of read.symbols) edges.push({ from: read.from, sym, to: read.to });
+  }
   if (!edges.length && start === null) throw new EngineError("Enter your automaton: a start line, an accept line, and one transition per line.");
   if (start === null) throw new EngineError(`Say which state is the start state, for example "start: q0".`);
   id(start);
