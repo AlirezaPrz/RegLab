@@ -2,9 +2,10 @@
  * The automata engine: everything RegLab knows about regular languages.
  *
  * Every input becomes a total DFA over a fixed alphabet: a regular expression in course
- * notation (an NFA built by induction on the expression, then subset construction), a language description (one DFA
- * per condition, joined by product construction), or a DFA/NFA written as transitions. DFAs are
- * then minimized (Moore partition refinement), compared, and turned back into explanations.
+ * notation (an NFA built by induction on the expression, then subset construction), a language
+ * description (one DFA whose states are combinations of what the description keeps track of), or a
+ * DFA/NFA written as transitions. DFAs are then minimized (Moore partition refinement), compared,
+ * and turned back into explanations.
  *
  * Erasable TypeScript only, with no DOM and no dependencies, so Node runs it directly in the
  * tests and Vite bundles it for the browser.
@@ -513,17 +514,37 @@ function replaceMapped(m: Mapped, re: RegExp, rep: string): Mapped {
 /** A count test: modular (count mod m = r) or a comparison (count op k). */
 type NumericTest = { mod: number; r: number; op?: undefined; k?: undefined } | { op: string; k: number; mod?: undefined; r?: undefined };
 
+/** Something a description talks about, which a DFA keeps track of while it reads w. */
+type Quantity =
+  | { kind: "count"; pattern: string }
+  | { kind: "length" }
+  | { kind: "sum" }
+  | { kind: "value" }
+  | { kind: "prefix"; pattern: string }
+  | { kind: "suffix"; pattern: string }
+  | { kind: "firstLast" };
+
+/** A description as a tree of conditions; `q` is the index of the quantity a condition is about. */
+type Condition =
+  | { t: "numeric"; q: number; test: NumericTest }
+  | { t: "prefix" | "suffix"; q: number }
+  | { t: "firstLast"; q: number; same: boolean }
+  | { t: "true" }
+  | { t: "not"; a: Condition }
+  | { t: "and" | "or" | "xor"; a: Condition; b: Condition };
+
+/** A parsed description: the condition tree, the quantities it mentions, and the numeric tests on each. */
+interface Description { cond: Condition; quantities: Quantity[]; tests: NumericTest[][] }
+
 /**
- * Parses a language description into its minimal DFA. Each condition becomes a small DFA whose
- * state is the least it must remember; and, or and xor use the product construction, and not
- * uses the complement. Examples:
- *   #_ab(w) = 1            #a is even              |w| mod 3 = 0
- *   starts with aba        ends in aa              contains bab
- *   first = last           sum divisible by 3      value mod 3 = 0
- * combined with and, or, xor, not and parentheses (precedence: not, and, xor, or).
- * Throws EngineError whose from/to point into `src`.
+ * Parses a language description. Conditions:
+ *   #_ab(w) = 1        #_a(w) mod 2 = 0       |w| >= 3        sum mod 3 = 0     value mod 3 = 0
+ *   starts with aba    ends in aa             first = last    first != last
+ * combined with and, or, xor, not and parentheses (precedence: not, and, xor, or). Each form is
+ * written one way only; the retired ones (contains, is even, divisible by, begins with, ends with,
+ * length) get an error that names the form to use. Throws EngineError whose from/to point into `src`.
  */
-export function parseSpec(src: string, alphabet: readonly string[]): DFA<never> {
+function parseDescription(src: string, alphabet: readonly string[]): Description {
   // spell symbol operators as words, keeping a map back to src for error positions
   let mapped: Mapped = { s: src, at: Array.from({ length: src.length + 1 }, (_, i) => i) };
   for (const [re, rep] of [
@@ -548,106 +569,424 @@ export function parseSpec(src: string, alphabet: readonly string[]): DFA<never> 
     pos += m[0].length;
     return m;
   };
+  // a form that is written another way here: point at it and say how
+  const retired = (re: RegExp, instead: (m: RegExpMatchArray) => string) => {
+    ws();
+    const at = pos, m = eat(re);
+    if (m) fail(`Write ${instead(m)} instead of "${m[0].trim()}".`, at, pos);
+  };
   let condStart = 0;
   const word = (v: string | undefined): string => {
     if (!v) fail("A substring is missing.", condStart, pos);
     for (const c of v!) if (!alphabet.includes(c)) fail(`"${c}" in "${v}" is not in the alphabet {${alphabet.join(", ")}}.`, condStart, pos);
     return v!;
   };
-  const machine = <S,>(init: S, step: (s: S, ch: string) => S, accept: (s: S) => unknown) => dfaFromMachine(alphabet, init, step, accept);
+  const digitsOnly = (what: string) => {
+    for (const c of alphabet) if (!/^\d$/.test(c)) fail(`"${what}" needs an alphabet of digits, but "${c}" is not a digit.`, condStart, pos);
+  };
 
-  // "<quantity> = 2", "<quantity> mod 3 = 0", "<quantity> is even", "<quantity> divisible by 3"
+  const quantities: Quantity[] = [], tests: NumericTest[][] = [], index = new Map<string, number>();
+  const use = (q: Quantity) => {
+    const key = JSON.stringify(q);
+    if (!index.has(key)) { index.set(key, quantities.length); quantities.push(q); tests.push([]); }
+    return index.get(key)!;
+  };
+  const numeric = (q: Quantity, test: NumericTest): Condition => {
+    const i = use(q);
+    tests[i].push(test);
+    return { t: "numeric", q: i, test };
+  };
+
+  // "<quantity> = 2", "<quantity> >= 1", "<quantity> mod 3 = 0"
   function numericTest(what: string): NumericTest {
     let m: RegExpMatchArray | null;
-    if ((m = eat(/mod\s*(\d+)\s*=\s*(\d+)/))) return { mod: +m[1], r: +m[2] % +m[1] };
-    if ((m = eat(/(?:is\s+)?(even|odd)\b/))) return { mod: 2, r: m[1].toLowerCase() === "odd" ? 1 : 0 };
-    if ((m = eat(/(?:is\s+)?divisible\s+by\s+(\d+)/))) return { mod: +m[1], r: 0 };
+    retired(/(?:is\s+)?(even|odd)\b/, (r) => `"mod 2 = ${r[1].toLowerCase() === "odd" ? 1 : 0}"`);
+    retired(/(?:is\s+)?divisible\s+by\s+(\d+)/, (r) => `"mod ${r[1]} = 0"`);
+    ws();
+    const at = pos;
+    if ((m = eat(/mod\s*(\d+)\s*=\s*(\d+)/))) {
+      if (+m[1] < 1) fail("mod needs a positive number.", at, pos);
+      return { mod: +m[1], r: +m[2] % +m[1] };
+    }
     if ((m = eat(/(>=|<=|!=|=|>|<)\s*(\d+)/))) return { op: m[1], k: +m[2] };
     // two unbounded counts (like #a = #b) cannot be tracked with finitely many states
-    if (eat(/(>=|<=|!=|=|>|<)\s*#/)) fail("Comparing two counts with each other (like #a = #b) is usually not a regular language, so it can't be described here. If your language is regular, enter a reference regular expression instead.", condStart, tokenEnd(pos));
+    if (eat(/(>=|<=|!=|=|>|<)\s*#/)) fail("Comparing two counts with each other (like #a = #b) usually gives a language that is not regular, so it can't be described here.", condStart, tokenEnd(pos));
     ws();
-    return fail(`After ${what}, expected a comparison such as "= 2", ">= 1", "mod 3 = 0" or "is even".`);
-  }
-  // A count capped at k+1 is enough for any comparison with k, so the state set stays finite.
-  function counter(test: NumericTest) {
-    if (test.mod !== undefined) {
-      if (test.mod < 1) fail("mod needs a positive number.", condStart, pos);
-      return { norm: (c: number) => c % test.mod, ok: (c: number) => c === test.r };
-    }
-    return { norm: (c: number) => Math.min(c, test.k + 1), ok: (c: number) => CMP[test.op](c, test.k) };
+    return fail(`After ${what}, expected a comparison such as "= 2", ">= 1" or "mod 3 = 0".`);
   }
 
-  function atom(): DFA {
+  function atom(): Condition {
     let m: RegExpMatchArray | null;
     if (eat(/\(/)) {
-      const d = orExpr();
+      const c = orExpr();
       if (!eat(/\)/)) { ws(); fail("Missing closing parenthesis."); }
-      return d;
+      return c;
     }
     ws();
     condStart = pos;
+    retired(/(?:w\s+)?contains\s+(\S+?)(?=[\s)]|$)/, (r) => `"#_${r[1]}(w) > 0"`);
+    retired(/(?:w\s+)?begins\s+with\b/, () => `"starts with"`);
+    retired(/(?:w\s+)?ends\s+with\b/, () => `"ends in"`);
+    retired(/length\b|len\(w\)/, () => `"|w|"`);
     if ((m = eat(/#_?\{?([^\s(){}=<>!]+)\}?(?:\(w\))?/))) {
       const v = word(m[1]);
-      const { norm, ok } = counter(numericTest(`#${v}(w)`));
-      // remember the last |v|-1 symbols, so overlapping occurrences are counted
-      const keep = v.length - 1;
-      return machine<[string, number]>(["", 0], ([buf, c], ch) => {
-        const nb = (buf + ch).slice(-v.length);
-        return [keep ? nb.slice(-keep) : "", norm(c + (nb === v ? 1 : 0))];
-      }, ([, c]) => ok(c));
+      return numeric({ kind: "count", pattern: v }, numericTest(`#_${v}(w)`));
     }
-    if (eat(/\|w\||length|len\(w\)/)) {
-      const { norm, ok } = counter(numericTest("|w|"));
-      return machine<number>(0, (c) => norm(c + 1), ok);
-    }
+    if (eat(/\|w\|/)) return numeric({ kind: "length" }, numericTest("|w|"));
     if (eat(/sum(?:\s+of\s+digits)?(?:\(w\))?/)) {
-      for (const c of alphabet) if (!/\d/.test(c)) fail(`"sum" needs an alphabet of digits, but "${c}" is not a digit.`, condStart, pos);
-      const { norm, ok } = counter(numericTest("sum"));
-      return machine<number>(0, (c, ch) => norm(c + Number(ch)), ok);
+      digitsOnly("sum");
+      return numeric({ kind: "sum" }, numericTest("sum"));
     }
     if (eat(/value(?:\(w\))?/)) {
-      for (const c of alphabet) if (!/\d/.test(c)) fail(`"value" needs an alphabet of digits, but "${c}" is not a digit.`, condStart, pos);
+      digitsOnly("value");
       const test = numericTest("value");
-      if (test.mod === undefined) fail(`"value" supports "mod m = r" and "divisible by m".`, condStart, pos);
-      const mod = test.mod!;
-      // -1 marks "nothing read yet": the empty string is not a number, so it is not in the language
-      return machine<number>(-1, (c, ch) => ((c < 0 ? 0 : c) * 10 + Number(ch)) % mod, (c) => c === test.r);
+      if (test.mod === undefined) fail(`"value" supports "mod m = r" only.`, condStart, pos);
+      return numeric({ kind: "value" }, test);
     }
-    if ((m = eat(/(?:w\s+)?(?:starts|begins)\s+with\s+(\S+?)(?=[\s)]|$)/))) {
-      const v = word(m[1]);
-      // state: how much of v has matched; -1 is the dead state after a mismatch
-      return machine<number>(0, (i, ch) => (i === v.length ? i : i >= 0 && v[i] === ch ? i + 1 : -1), (i) => i === v.length);
-    }
-    if ((m = eat(/(?:w\s+)?ends\s+(?:with|in)\s+(\S+?)(?=[\s)]|$)/))) {
-      const v = word(m[1]);
-      return machine("", (buf, ch) => (buf + ch).slice(-v.length), (buf) => buf === v);
-    }
-    if ((m = eat(/(?:w\s+)?contains\s+(\S+?)(?=[\s)]|$)/))) {
-      const v = word(m[1]);
-      // once v has been seen the state stays v
-      return machine("", (buf, ch) => (buf === v ? v : (buf + ch).slice(-v.length)), (buf) => buf === v);
-    }
-    if ((m = eat(/first\s*(!=|=)\s*last/))) {
-      // ε has no first or last symbol; it counts as "first = last", so "first != last" rejects it
-      const same = m[1] === "=";
-      return machine<[string, string] | null>(null, (st, ch) => [st ? st[0] : ch, ch], (st) => (st ? (st[0] === st[1]) === same : same));
-    }
-    if (eat(/true|anything|all strings/)) return machine(0, () => 0, () => true);
+    if ((m = eat(/(?:w\s+)?starts\s+with\s+(\S+?)(?=[\s)]|$)/))) return { t: "prefix", q: use({ kind: "prefix", pattern: word(m[1]) }) };
+    if ((m = eat(/(?:w\s+)?ends\s+in\s+(\S+?)(?=[\s)]|$)/))) return { t: "suffix", q: use({ kind: "suffix", pattern: word(m[1]) }) };
+    if ((m = eat(/first\s*(!=|=)\s*last/))) return { t: "firstLast", q: use({ kind: "firstLast" }), same: m[1] === "=" };
+    if (eat(/true|anything|all strings/)) return { t: "true" };
     ws();
     return fail(pos >= s.length
       ? "The description ends where a condition was expected."
-      : `Could not understand "${s.slice(pos, pos + 20).trim()}". Try forms like "#_ab(w) = 1", "starts with aba", "ends in aa", "|w| is even".`);
+      : `Could not understand "${s.slice(pos, pos + 20).trim()}". Try forms like "#_ab(w) = 1", "starts with aba", "ends in aa", "|w| mod 2 = 0".`);
   }
-  function notExpr(): DFA { return eat(/not\b/) ? complement(notExpr()) : atom(); }
-  function andExpr(): DFA { let d = notExpr(); while (eat(/and\b|&&?/)) d = product(d, notExpr(), (a, b) => a && b); return d; }
-  function xorExpr(): DFA { let d = andExpr(); while (eat(/xor\b/)) d = product(d, andExpr(), (a, b) => a !== b); return d; }
-  function orExpr(): DFA { let d = xorExpr(); while (eat(/or\b|\|\|/)) d = product(d, xorExpr(), (a, b) => a || b); return d; }
+  function notExpr(): Condition { return eat(/not\b/) ? { t: "not", a: notExpr() } : atom(); }
+  function andExpr(): Condition { let c = notExpr(); while (eat(/and\b|&&?/)) c = { t: "and", a: c, b: notExpr() }; return c; }
+  function xorExpr(): Condition { let c = andExpr(); while (eat(/xor\b/)) c = { t: "xor", a: c, b: andExpr() }; return c; }
+  function orExpr(): Condition { let c = xorExpr(); while (eat(/or\b|\|\|/)) c = { t: "or", a: c, b: xorExpr() }; return c; }
 
   if (!s.trim()) fail("Describe the language.", 0, 0);
-  const d = orExpr();
+  const cond = orExpr();
   ws();
   if (pos < s.length) fail(`Could not understand "${s.slice(pos, pos + 20).trim()}". Join conditions with "and", "or", "xor" or "not".`);
-  return minimize(d).dfa;
+  return { cond, quantities, tests };
+}
+
+
+/** One thing a DFA for a description has to remember: `what` in description notation (or null), and its values in words, with strings over the alphabet in `backticks`. */
+export interface Remember { what: string | null; text: string }
+
+/**
+ * What a DFA remembers about one quantity: a value updated one symbol at a time. `parts` says what
+ * a value means about w, in description notation, split into the parts that can vary on their own
+ * (for #_ab(w): the count, and whether w ends in a).
+ */
+interface Tracker {
+  init: unknown;
+  step(v: unknown, ch: string): unknown;
+  holds(v: unknown, c: Condition): boolean;
+  parts(v: unknown): { key: string; says: string }[];
+  remember: Remember[];
+}
+function tracker<V>(t: { init: V; step(v: V, ch: string): V; holds(v: V, c: Condition): boolean; parts(v: V): { key: string; says: string }[]; remember: Remember[] }): Tracker {
+  return t as unknown as Tracker;
+}
+
+const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+const lcm = (a: number, b: number) => (a / gcd(a, b)) * b;
+const tick = (x: string) => "`" + x + "`";
+/** "x", "x or y", "x, y or z" */
+const listOr = (xs: string[]) => (xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " or " + xs[xs.length - 1]);
+/** 0 … n-1 in words: listed when short, as a range when long */
+const upTo = (n: number) => (n <= 6 ? listOr(Array.from({ length: n }, (_, i) => String(i))) : `0 to ${n - 1}`);
+
+/** The length of the longest prefix of v, at most `max` long, that t ends in. */
+function longestPrefixSuffix(v: string, t: string, max: number): number {
+  for (let k = Math.min(max, t.length); k > 0; k--) if (t.endsWith(v.slice(0, k))) return k;
+  return 0;
+}
+
+/**
+ * Exactly the strings whose longest suffix that is a prefix of v (at most `max` long) is v[0..p):
+ * they end in v[0..p) and in no longer such prefix. Of the longer prefixes only the shortest are
+ * named, since ending in a longer one means ending in a shorter one that it ends with.
+ */
+function endsClause(v: string, p: number, max: number): string {
+  const mine = v.slice(0, p);
+  const longer: string[] = [];
+  for (let k = p + 1; k <= max; k++) if (v.slice(0, k).endsWith(mine)) longer.push(v.slice(0, k));
+  const needed = longer.filter((y) => !longer.some((x) => x.length < y.length && y.endsWith(x)));
+  return [...(p > 0 ? [`ends in ${mine}`] : []), ...needed.map((x) => `not ends in ${x}`)].join(" and ");
+}
+
+/**
+ * A number that only grows (a count, the length, a digit sum), kept exactly while it is below
+ * `cap` and only as a remainder mod `mod` after that. The cap is the smallest number past which
+ * every comparison already has its answer (k for ">= k" and "< k", k + 1 for the others); the
+ * modulus is the lcm of the moduli used. A value s < cap is the number itself; s >= cap means the
+ * number is at least cap and leaves remainder s - cap.
+ */
+function numberScale(name: string, tests: NumericTest[]) {
+  const cap = Math.max(0, ...tests.map((t) => (t.op === undefined ? 0 : t.op === ">=" || t.op === "<" ? t.k : t.k + 1)));
+  const mod = tests.reduce((m, t) => (t.mod !== undefined ? lcm(m, t.mod) : m), 1);
+  const remember: Remember = mod === 1
+    ? { what: name, text: cap <= 6 ? listOr([...Array.from({ length: cap }, (_, i) => String(i)), `at least ${cap}`]) : `0 to ${cap - 1}, or at least ${cap}` }
+    : cap === 0
+      ? { what: `${name} mod ${mod}`, text: upTo(mod) }
+      : { what: name, text: `exactly while it is below ${cap}, then only its remainder mod ${mod}` };
+  return {
+    remember,
+    /** cap 0 and no modulus: every comparison has its answer from the start, so there is nothing to track */
+    trivial: cap === 0 && mod === 1,
+    /** past the cap with no modulus, growing further changes no answer */
+    settled: (s: number) => mod === 1 && s >= cap,
+    add: (s: number, d: number) => (s < cap && s + d < cap ? s + d : cap + ((s < cap ? s + d : s - cap + d) % mod)),
+    holds: (s: number, t: NumericTest) => (t.mod !== undefined ? (s < cap ? s : s - cap) % t.mod === t.r : CMP[t.op](Math.min(s, cap), t.k)),
+    says: (s: number) => (s < cap ? `${name} = ${s}`
+      : mod === 1 ? `${name} >= ${cap}`
+      : cap === 0 ? `${name} mod ${mod} = ${s}`
+      : `${name} >= ${cap} and ${name} mod ${mod} = ${s - cap}`),
+  };
+}
+
+const testOf = (c: Condition) => (c as Extract<Condition, { t: "numeric" }>).test;
+
+/** A quantity whose tests all have the same answer for every string (like "#_a(w) >= 0"): nothing to remember. */
+const constant = (holds: (c: Condition) => boolean) => tracker<number>({ init: 0, step: () => 0, holds: (_, c) => holds(c), parts: () => [], remember: [] });
+
+/** The tracker for a quantity, sized for the tests the description makes on it. */
+function makeTracker(q: Quantity, tests: NumericTest[], alphabet: readonly string[]): Tracker {
+  switch (q.kind) {
+    case "count": {
+      // the count, and how much of the next occurrence has just been read, so overlaps count.
+      // Once the count is settled, the progress is no longer needed (-1), so it stops splitting states.
+      const v = q.pattern, n = numberScale(`#_${v}(w)`, tests), keep = v.length - 1;
+      if (n.trivial) return constant((c) => n.holds(0, testOf(c)));
+      return tracker<[number, number]>({
+        init: [0, 0],
+        step: ([p, s], ch) => {
+          if (n.settled(s)) return [-1, s];
+          const t = v.slice(0, p) + ch, next = n.add(s, t === v ? 1 : 0);
+          return [n.settled(next) ? -1 : longestPrefixSuffix(v, t, keep), next];
+        },
+        holds: ([, s], c) => n.holds(s, testOf(c)),
+        // progress -1 happens exactly when the count is settled, so it says what the count says
+        parts: ([p, s]) => [{ key: `n${s}`, says: n.says(s) }, ...(keep ? [{ key: `p${p}`, says: p < 0 ? n.says(s) : endsClause(v, p, keep) }] : [])],
+        remember: [n.remember, ...(!keep ? []
+          : keep === 1 ? [{ what: null, text: `whether w ends in ${tick(v[0])}, which could start the next ${tick(v)}` }]
+          : [{ what: null, text: `how much of the next ${tick(v)} w has just read: ${listOr(["none", ...Array.from({ length: keep }, (_, k) => tick(v.slice(0, k + 1)))])}` }])],
+      });
+    }
+    case "length": {
+      const n = numberScale("|w|", tests);
+      if (n.trivial) return constant((c) => n.holds(0, testOf(c)));
+      return tracker<number>({ init: 0, step: (s) => n.add(s, 1), holds: (s, c) => n.holds(s, testOf(c)), parts: (s) => [{ key: `n${s}`, says: n.says(s) }], remember: [n.remember] });
+    }
+    case "sum": {
+      const n = numberScale("sum", tests);
+      if (n.trivial) return constant((c) => n.holds(0, testOf(c)));
+      return tracker<number>({ init: 0, step: (s, ch) => n.add(s, Number(ch)), holds: (s, c) => n.holds(s, testOf(c)), parts: (s) => [{ key: `n${s}`, says: n.says(s) }], remember: [n.remember] });
+    }
+    case "value": {
+      // the number's value mod m, read left to right; -1 until a digit has been read (ε has no value)
+      const mod = tests.reduce((m, t) => lcm(m, t.mod!), 1);
+      return tracker<number>({
+        init: -1,
+        step: (r, ch) => ((r < 0 ? 0 : r) * 10 + Number(ch)) % mod,
+        holds: (r, c) => r >= 0 && r % testOf(c).mod! === testOf(c).r,
+        parts: (r) => [{ key: `v${r}`, says: r < 0 ? "|w| = 0" : `value mod ${mod} = ${r}` }],
+        remember: [{ what: `value mod ${mod}`, text: `${upTo(mod)}, once a digit has been read` }],
+      });
+    }
+    case "prefix": {
+      // how much of v has matched; v.length once it has, -1 after a mismatch
+      const v = q.pattern;
+      const mismatches: string[] = [];
+      for (let j = 0; j < v.length; j++) for (const c of alphabet) if (c !== v[j]) mismatches.push(`starts with ${v.slice(0, j) + c}`);
+      return tracker<number>({
+        init: 0,
+        step: (i, ch) => (i === v.length ? i : i >= 0 && v[i] === ch ? i + 1 : -1),
+        holds: (i) => i === v.length,
+        parts: (i) => [{ key: `s${i}`, says: i === v.length ? `starts with ${v}` : i > 0 ? `|w| = ${i} and starts with ${v.slice(0, i)}` : i === 0 ? "|w| = 0" : mismatches.join(" or ") }],
+        remember: [{ what: null, text: v.length === 1
+          ? `whether w starts with ${tick(v)}: nothing read yet, yes or no`
+          : `how much of ${tick(v)} w starts with: ${listOr(["none", ...Array.from({ length: v.length - 1 }, (_, k) => tick(v.slice(0, k + 1))), "all of it"])}, or that it starts some other way` }],
+      });
+    }
+    case "suffix": {
+      // the longest prefix of v that w ends in (KMP): a wrong symbol falls back, it never dies
+      const v = q.pattern;
+      return tracker<number>({
+        init: 0,
+        step: (p, ch) => longestPrefixSuffix(v, v.slice(0, p) + ch, v.length),
+        holds: (p) => p === v.length,
+        parts: (p) => [{ key: `e${p}`, says: endsClause(v, p, v.length) }],
+        remember: [{ what: null, text: v.length === 1
+          ? `whether w ends in ${tick(v)}`
+          : `how much of ${tick(v)} w ends in: ${listOr(["none", ...Array.from({ length: v.length - 1 }, (_, k) => tick(v.slice(0, k + 1))), "all of it"])}` }],
+      });
+    }
+    case "firstLast":
+      // ε has no first or last symbol; it counts as "first = last", so "first != last" rejects it
+      return tracker<[string, string] | null>({
+        init: null,
+        step: (st, ch) => [st ? st[0] : ch, ch],
+        holds: (st, c) => { const same = (c as Extract<Condition, { t: "firstLast" }>).same; return st ? (st[0] === st[1]) === same : same; },
+        parts: (st) => [{ key: st ? st.join(" ") : "-", says: st ? `starts with ${st[0]} and ends in ${st[1]}` : "|w| = 0" }],
+        remember: [{ what: null, text: "the first and the last symbol of w" }],
+      });
+  }
+}
+
+/** The DFA a description defines, built from what it tracks: its states are combinations of the trackers' values. */
+function trackedDfa(src: string, alphabet: readonly string[]) {
+  const { cond, quantities, tests } = parseDescription(src, alphabet);
+  const trackers = quantities.map((q, i) => makeTracker(q, tests[i], alphabet));
+  const holds = (c: Condition, vals: unknown[]): boolean => {
+    switch (c.t) {
+      case "true": return true;
+      case "not": return !holds(c.a, vals);
+      case "and": return holds(c.a, vals) && holds(c.b, vals);
+      case "or": return holds(c.a, vals) || holds(c.b, vals);
+      case "xor": return holds(c.a, vals) !== holds(c.b, vals);
+      default: return trackers[c.q].holds(vals[c.q], c);
+    }
+  };
+  const dfa = dfaFromMachine<unknown[]>(alphabet, trackers.map((t) => t.init), (vals, ch) => vals.map((v, i) => trackers[i].step(v, ch)), (vals) => holds(cond, vals));
+  return { dfa, trackers };
+}
+
+/** Parses a language description into its minimal DFA (see parseDescription for the forms). */
+export function parseSpec(src: string, alphabet: readonly string[]): DFA<never> {
+  return minimize(trackedDfa(src, alphabet).dfa).dfa;
+}
+
+/** A description's DFA in the form people design it, with the meaning of every state. */
+export interface ExplainedSpec {
+  /**
+   * The states are combinations of what the description tracks; the ones from which no string is
+   * accepted are merged into one dead state, and the ones from which every string is accepted
+   * into one state too. Otherwise nothing is merged, so it can be larger than the minimal DFA.
+   */
+  dfa: DFA;
+  /** q0, q1, … in breadth-first order, and "dead" */
+  names: string[];
+  /**
+   * says[s]: what is true of w exactly when the DFA is in state s after reading w, in description
+   * notation (parseSpec(says[s]) is the set of strings that lead to s). null only for a merged
+   * state that has no short description.
+   */
+  says: (string | null)[];
+  /** "dead": no string is accepted from here; "all": every string is */
+  sink: ("dead" | "all" | null)[];
+  /** what the DFA has to remember, in the order the description mentions it */
+  remember: Remember[];
+}
+
+/** Renumbers d in place so that state `s` comes last, keeping the order of the others. */
+function moveToEnd<L>(d: DFA<L>, s: number) {
+  const order = [...Array.from({ length: d.n }, (_, i) => i).filter((i) => i !== s), s];
+  const at = new Map(order.map((old, i) => [old, i]));
+  d.delta = order.map((old) => d.delta[old].map((t) => at.get(t)!));
+  d.accept = order.map((old) => d.accept[old]);
+  if (d.labels) d.labels = order.map((old) => d.labels![old]);
+  d.start = at.get(d.start)!;
+}
+
+/** Builds the DFA for a description the way people design one, and says what each state means. */
+export function explainSpec(src: string, alphabet: readonly string[]): ExplainedSpec {
+  const { dfa: full, trackers } = trackedDfa(src, alphabet);
+  // each state's value, split into parts; part id "i.j" is part j of tracker i
+  const parts = full.labels!.map((vals) => trackers.flatMap((t, i) => t.parts(vals[i]).map((p, j) => ({ id: `${i}.${j}`, ...p }))));
+  // a conjunction of parts, each split into single clauses so that one said twice appears once
+  const clausesOf = (says: string[]) => [...new Set(says.filter(Boolean).flatMap((x) => (/\bor\b/.test(x) ? [x] : x.split(" and "))))];
+  const both = (clauses: string[]) => clauses.map((x) => (clauses.length > 1 && /\bor\b/.test(x) ? `(${x})` : x)).join(" and ");
+  const conj = (says: string[]) => both(clausesOf(says));
+
+  // merge the states from which no string is accepted, and those from which every string is
+  const canAccept = canReach(full, true), canReject = canReach(full, false);
+  const sinkOf = (s: number) => (!canAccept[s] ? "dead" : !canReject[s] ? "all" : null);
+  const cls = full.accept.map((_, s) => sinkOf(s) ?? s);
+  const rep = new Map<number | string, number>();
+  cls.forEach((c, s) => { if (!rep.has(c)) rep.set(c, s); });
+  const dfa = dfaFromMachine<number | string>(full.alphabet, cls[full.start], (c, ch) => cls[full.delta[rep.get(c)!][full.alphabet.indexOf(ch)]], (c) => full.accept[rep.get(c)!]);
+
+  /**
+   * A short description of a merged state. First try values of single parts that occur only in
+   * its members, joined with "or", if together they cover all of them (e.g. "#_a(w) >= 2 or
+   * #_b(w) >= 2"). Failing that, find the fewest parts (two or three) whose values alone decide
+   * whether a state is a member, and join the members' value combinations with "or" (e.g.
+   * "#_aba(w) >= 1 and #_bab(w) >= 1"). A part's value describes exactly the strings that give it
+   * that value, so either way the description is exact. null when neither works with at most three
+   * alternatives, or when the state is the whole DFA (nothing to tell apart).
+   */
+  const describeSink = (members: Set<number>): string | null => {
+    if (members.size === full.n) return null;
+    const byValue = new Map<string, { says: string; states: number[] }>();
+    parts.forEach((ps, s) => ps.filter((p) => p.says).forEach((p) => {
+      const k = p.id + "=" + p.key;
+      if (!byValue.has(k)) byValue.set(k, { says: p.says, states: [] });
+      byValue.get(k)!.states.push(s);
+    }));
+    const only = [...byValue.values()].filter((v) => v.states.every((s) => members.has(s))).sort((a, b) => b.states.length - a.states.length);
+    const covered = new Set<number>(), chosen: string[] = [];
+    for (const v of only) {
+      if (v.states.every((s) => covered.has(s))) continue;
+      v.states.forEach((s) => covered.add(s));
+      if (!chosen.includes(v.says)) chosen.push(v.says);
+    }
+    const either = (alts: string[]) => alts.map((x) => (alts.length > 1 && /\band\b|\bor\b/.test(x) ? `(${x})` : x)).join(" or ");
+    if (covered.size === members.size && chosen.length <= 3) return either(chosen);
+
+    const ids = [...new Set(parts[0].filter((p) => p.says).map((p) => p.id))];
+    const valueOf = (st: number, id: string) => parts[st].find((p) => p.id === id)!;
+    const subsets = (size: number, from = 0): string[][] =>
+      size === 0 ? [[]] : ids.slice(from).flatMap((id, i) => subsets(size - 1, from + i + 1).map((rest) => [id, ...rest]));
+    for (let size = 2; size <= Math.min(3, ids.length); size++) {
+      for (const chosenIds of subsets(size)) {
+        const decides = new Map<string, boolean>();
+        let ok = true;
+        for (let st = 0; st < full.n && ok; st++) {
+          const combo = chosenIds.map((id) => valueOf(st, id).key).join("|");
+          if (decides.has(combo) && decides.get(combo) !== members.has(st)) ok = false;
+          else decides.set(combo, members.has(st));
+        }
+        if (!ok) continue;
+        const combos = new Map<string, string>();
+        members.forEach((st) => {
+          const combo = chosenIds.map((id) => valueOf(st, id).key).join("|");
+          if (!combos.has(combo)) combos.set(combo, conj(chosenIds.map((id) => valueOf(st, id).says)));
+        });
+        if (combos.size <= 3) return either([...combos.values()]);
+      }
+    }
+    return null;
+  };
+
+  // the dead state goes last, so tables read from the start state to the dead end
+  const deadAt = dfa.labels!.indexOf("dead");
+  if (deadAt >= 0) moveToEnd(dfa, deadAt);
+  let k = 0;
+  const labels = dfa.labels!;
+  const names = labels.map((c) => (c === "dead" ? "dead" : "q" + k++));
+  const sink = labels.map((c) => (typeof c === "string" ? (c as "dead" | "all") : null));
+  /**
+   * Shortens a state's description without changing what it says: a state reached only by ε is
+   * "|w| = 0", and otherwise clauses are dropped one at a time (last first) as long as the rest
+   * still describes exactly the strings that reach the state, which is checked by parsing it.
+   * Skipped for large DFAs, where the checks would take too long.
+   */
+  const reachOf = (st: number): DFA => ({ ...dfa, accept: dfa.accept.map((_, i) => i === st), labels: undefined });
+  const exact = (text: string, st: number) => compare(parseSpec(text, alphabet), reachOf(st)).correct;
+  const shorten = (clauses: string[], st: number) => {
+    if (dfa.n > 40 || clauses.length < 2) return clauses;
+    if (exact("|w| = 0", st)) return ["|w| = 0"];
+    let kept = clauses;
+    for (let i = kept.length - 1; i >= 0 && kept.length > 1; i--) {
+      const without = kept.filter((_, j) => j !== i);
+      if (exact(both(without), st)) kept = without;
+    }
+    return kept;
+  };
+  const says = labels.map((c, st) => {
+    if (typeof c === "number") return both(shorten(clausesOf(parts[c].map((p) => p.says)), st));
+    const members = new Set(cls.flatMap((x, s) => (x === c ? [s] : [])));
+    return describeSink(members);
+  });
+  delete dfa.labels;
+  return { dfa, names, says, sink, remember: trackers.flatMap((t) => t.remember) };
 }
 
 
