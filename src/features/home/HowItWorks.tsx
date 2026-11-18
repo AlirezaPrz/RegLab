@@ -21,7 +21,7 @@ type Demo = ReturnType<typeof buildDemo>;
 
 // everything on the stage is the engine's real output for this example
 function buildDemo() {
-  const lang = readLanguage(LANGUAGE.alphabet, "spec", LANGUAGE.text);
+  const lang = readLanguage(LANGUAGE.alphabet, LANGUAGE.text);
   const answer = readAnswer("automaton", ANSWER, lang.alphabet);
   return { lang, answer, fb: checkAnswer(answer, lang), sample: samples(lang, 5) };
 }
@@ -47,7 +47,7 @@ function Stage({ demo, step, only = false }: { demo: Demo; step: number; only?: 
   const parts = [
     { show: [0], el: (
       <div key="lang" className="stage-part stage-lang">
-        <p className="stage-def"><Definition alphabet={lang.alphabet} source="spec" text={LANGUAGE.text} /></p>
+        <p className="stage-def"><Definition alphabet={lang.alphabet} text={LANGUAGE.text} /></p>
         <p className="stage-samples">
           <span className="muted">In <i className="math">L</i></span> {sample.yes.map((w) => <StringToken key={w} value={w} />)}
         </p>

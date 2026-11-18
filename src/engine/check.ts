@@ -10,27 +10,24 @@ import {
 } from "./engine.ts";
 
 
-/** How the reference language was given: a description ("spec") or a regular expression. */
-export type LanguageSource = "spec" | "regex";
-
-/** The reference language, ready to check answers against. */
+/** The reference language, given by a description, ready to check answers against. */
 export interface Language {
   alphabet: string[];
   /** its minimal DFA */
   dfa: DFA;
-  source: LanguageSource;
-  /** the description or regex as typed */
+  /** the description as typed */
   text: string;
 }
 
-/** Reads the alphabet and the reference language. Throws EngineError with `field` naming the input that is wrong. */
-export function readLanguage(alphabetSrc: string, source: LanguageSource, src: string): Language {
-  let alphabet: string[];
-  try { alphabet = parseAlphabet(alphabetSrc); } catch (e) { throw tag(e, "alphabet"); }
-  try {
-    const dfa = source === "spec" ? parseSpec(src, alphabet) : regexToDfa(src, alphabet);
-    return { alphabet, dfa, source, text: src };
-  } catch (e) { throw tag(e, "language"); }
+/** Reads the alphabet and the description of the language. Throws EngineError with `field` naming the input that is wrong. */
+export function readLanguage(alphabetSrc: string, src: string): Language {
+  const alphabet = readAlphabet(alphabetSrc);
+  try { return { alphabet, dfa: parseSpec(src, alphabet), text: src }; }
+  catch (e) { throw tag(e, "language"); }
+}
+
+function readAlphabet(src: string): string[] {
+  try { return parseAlphabet(src); } catch (e) { throw tag(e, "alphabet"); }
 }
 
 /** The shortest strings in and not in the language, for the student to sanity-check their description. */
@@ -46,16 +43,15 @@ export interface Hints {
   classes: { rep: string; accepting: boolean }[];
   /** the minimal DFA itself: the full solution */
   solution: AutomatonModel;
-  /** a regular expression for the language: the reference itself when one was given, else built from the DFA */
+  /** a regular expression for the language, built from the DFA by state elimination */
   regex: string;
 }
 
-/** Hints for a language. The regex is the reference itself when one was given, so the solution matches what the student saw. */
+/** Hints for a language. */
 export function hints(lang: Language): Hints {
   const classes = nerodeClasses(lang.dfa);
   const min = minimize(lang.dfa).dfa;
-  const regex = lang.source === "regex" ? lang.text.replace(/\s+/g, "") : dfaToRegex(lang.dfa);
-  return { minStates: classes.length, classes, solution: modelFromDfa(min), regex };
+  return { minStates: classes.length, classes, solution: modelFromDfa(min), regex: dfaToRegex(lang.dfa) };
 }
 
 

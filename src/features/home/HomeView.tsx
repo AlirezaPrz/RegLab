@@ -19,7 +19,7 @@ const TOOLS: { name: string; what: string; href?: string }[] = [
 /** The landing page. */
 export function HomeView() {
   // a real minimal DFA from the engine, drawn in the regular-languages tile
-  const preview = useMemo(() => hints(readLanguage("a b", "spec", "ends in aa")).solution, []);
+  const preview = useMemo(() => hints(readLanguage("a b", "ends in aa")).solution, []);
   const [live, ...planned] = TOOLS;
 
   return (

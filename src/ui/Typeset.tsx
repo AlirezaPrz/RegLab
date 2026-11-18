@@ -40,19 +40,11 @@ export function TypesetRegex({ text }: { text: string }) {
   return <>{out}</>;
 }
 
-/** The whole definition: L = { w ∈ {a, b}* : … } or L = L(r). */
-export function Definition({ alphabet, source, text }: { alphabet: string[]; source: "spec" | "regex"; text: string }) {
-  const lhs = <><i>L</i> <span className="m-op">=</span> </>;
-  if (source === "regex") {
-    return (
-      <span className="math">
-        {lhs}<i>L</i>(<TypesetRegex text={text} />)
-      </span>
-    );
-  }
+/** The whole definition of a described language: L = { w ∈ {a, b}* : … }. */
+export function Definition({ alphabet, text }: { alphabet: string[]; text: string }) {
   return (
     <span className="math">
-      {lhs}{"{ "}<i>w</i> <span className="m-op">∈</span> {"{"}{alphabet.join(", ")}{"}"}<sup>∗</sup>
+      <i>L</i> <span className="m-op">=</span> {"{ "}<i>w</i> <span className="m-op">∈</span> {"{"}{alphabet.join(", ")}{"}"}<sup>∗</sup>
       <span className="m-colon"> : </span><TypesetSpec text={text.trim()} />{" }"}
     </span>
   );

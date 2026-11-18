@@ -4,7 +4,6 @@ import type { Dispatch } from "react";
 import type { Action, Derived, WorkbenchState } from "../../state/useWorkbench.ts";
 import { EXAMPLES } from "../../state/examples.ts";
 import { FieldError, selectInInput } from "../../ui/FieldError.tsx";
-import { SymbolKeys } from "../../ui/SymbolKeys.tsx";
 import { StringToken } from "../../ui/StringToken.tsx";
 import { Definition } from "../../ui/Typeset.tsx";
 import { Segmented } from "../../ui/Segmented.tsx";
@@ -87,29 +86,17 @@ export function LanguagePanel({ state, derived, dispatch, onTry }: {
                     aria-invalid={!!alphaErr} aria-describedby={alphaErr ? ids.alphaErr : undefined}
                     onChange={(e) => dispatch({ type: "alphabet", value: e.target.value })} />
                 </div>
-                <div className="field">
-                  <span className="label" id={ids.lang + "-src"}>Given as</span>
-                  <Segmented labelledBy={ids.lang + "-src"} value={state.source}
-                    options={[{ value: "spec", label: "A description" }, { value: "regex", label: "A regular expression" }]}
-                    onChange={(v) => dispatch({ type: "source", value: v })} />
-                </div>
               </div>
               {alphaErr && <FieldError id={ids.alphaErr} error={alphaErr} source={state.alphabet} onLocate={() => selectInInput(alphaRef.current, alphaErr.from ?? 0, alphaErr.to ?? 0)} />}
               <div className="field">
-                <label htmlFor={ids.lang}>{state.source === "spec" ? "All strings w such that…" : "The language of this regular expression"}</label>
+                <label htmlFor={ids.lang}>All strings w such that…</label>
                 <textarea id={ids.lang} ref={langRef} className="mono" rows={2} value={state.language}
-                  placeholder={state.source === "spec" ? "ends in aa and |w| is even" : "(a+b)*aa"}
+                  placeholder="ends in aa and |w| is even"
                   spellCheck={false} autoComplete="off" autoCapitalize="off"
                   aria-invalid={!!langErr} aria-describedby={[ids.help, langErr ? ids.err : ""].join(" ").trim()}
                   onChange={(e) => dispatch({ type: "language", value: e.target.value })} />
-                {state.source === "regex" && (
-                  <SymbolKeys target={langRef} value={state.language} label="Regular expression symbols"
-                    onChange={(v) => dispatch({ type: "language", value: v })} />
-                )}
                 {langErr && <FieldError id={ids.err} error={langErr} source={state.language} onLocate={() => selectInInput(langRef.current, langErr.from ?? 0, langErr.to ?? 0)} />}
-                {state.source === "spec"
-                  ? <div id={ids.help} className="help">Describe which strings are in the language. {SPEC_HELP}</div>
-                  : <p id={ids.help} className="help">Enter any regular expression you already know is right, for example from solutions or a textbook.</p>}
+                <div id={ids.help} className="help">Describe which strings are in the language. {SPEC_HELP}</div>
               </div>
             </>
           )}
@@ -118,7 +105,7 @@ export function LanguagePanel({ state, derived, dispatch, onTry }: {
         <div className="band-definition" aria-live="polite">
           {derived.language ? (
             <>
-              <p className="definition"><Definition alphabet={derived.language.alphabet} source={state.source} text={state.language} /></p>
+              <p className="definition"><Definition alphabet={derived.language.alphabet} text={state.language} /></p>
               {derived.samples && (
                 <dl className="samples">
                   <dt>In <i className="math">L</i></dt>

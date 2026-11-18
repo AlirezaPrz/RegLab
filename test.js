@@ -138,7 +138,7 @@ test("errors: descriptions and automata say where", () => {
 
 // ------------------------------------------------- feedback (check.ts)
 
-const lang = (src, mode = "spec", alpha = "a b") => R.readLanguage(alpha, mode, src);
+const lang = (src, alpha = "a b") => R.readLanguage(alpha, src);
 const check = (mode, src, L) => R.checkAnswer(R.readAnswer(mode, src, L.alphabet), L);
 
 test("feedback: verdicts", () => {
@@ -170,7 +170,8 @@ test("feedback: mergeable and unreachable states", () => {
   assert.deepStrictEqual(f.states.unreachable, ["z"]);
 });
 test("feedback: NFA note and probe path", () => {
-  const L = lang("(a+b)*a(a+b)(a+b)", "regex");
+  // descriptions cannot say "third from the end", so this language is built directly
+  const L = { alphabet: ab, dfa: rx("(a+b)*a(a+b)(a+b)"), text: "" };
   const ans = R.readAnswer("automaton", "start: s\naccept: f\ns a,b s\ns a x\nx a,b y\ny a,b f", L.alphabet);
   const f = R.checkAnswer(ans, L);
   assert(f.correct && f.nfa && f.states === null);
@@ -187,7 +188,7 @@ test("feedback: hints match the minimal DFA", () => {
   assert.deepStrictEqual(h.solution.edges.find((e) => e.from === 2 && e.to === 2).symbols, ["a"]);
 });
 test("errors: readLanguage and readAnswer say which field", () => {
-  assert.throws(() => lang("ends in aa", "spec", "a ("), (e) => e.field === "alphabet");
+  assert.throws(() => lang("ends in aa", "a ("), (e) => e.field === "alphabet");
   assert.throws(() => lang("ends in zz"), (e) => e.field === "language");
   assert.throws(() => R.readAnswer("regex", "a+", ab), (e) => e.field === "answer");
 });
@@ -204,9 +205,8 @@ test("solution regex: describes exactly the language", () => {
   const d = spec("sum divisible by 3", ["1", "2"]);
   assert(R.compare(R.regexToDfa(R.dfaToRegex(d), ["1", "2"]), d).correct);
 });
-test("solution regex: hints give the reference regex when there is one", () => {
-  assert.strictEqual(R.hints(R.readLanguage("a b", "regex", "(a + b)*a")).regex, "(a+b)*a");
-  assert.strictEqual(R.hints(R.readLanguage("a b", "spec", "#_a(w) = 1")).regex, "b*ab*");
+test("solution regex: hints carry the regex", () => {
+  assert.strictEqual(R.hints(lang("#_a(w) = 1")).regex, "b*ab*");
 });
 
 // ------------------------------------------------- constructions for the converter

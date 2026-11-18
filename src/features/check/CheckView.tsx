@@ -50,13 +50,13 @@ export function CheckView() {
   const active = useMemo(() => (steps && stepIdx !== null ? new Set(steps[stepIdx].states) : undefined), [steps, stepIdx]);
   const marked = fb?.conflated?.studentState ?? null;
   const markedTag = fb?.conflated ? `(${conflationClaimNumber(fb)})` : undefined;
-  const langKey = `${state.alphabet}|${state.source}|${state.language}`;
+  const langKey = `${state.alphabet}|${state.language}`;
 
   return (
     <>
       {derived.language && (
         <div className={"pinned" + (bandHidden ? " is-shown" : "")} aria-hidden={!bandHidden}>
-          <span className="pinned-def"><Definition alphabet={derived.language.alphabet} source={state.source} text={state.language} /></span>
+          <span className="pinned-def"><Definition alphabet={derived.language.alphabet} text={state.language} /></span>
           {r && r.ok && !derived.stale && (
             <span className={"pinned-verdict " + (fb!.correct ? "is-good" : "is-bad")}>
               <Icon name={fb!.correct ? "check" : "cross"} size={14} />{fb!.correct ? "Correct" : "Not yet"}
