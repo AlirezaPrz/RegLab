@@ -314,6 +314,7 @@ test("convertRegex: NFA, subset DFA and smallest DFA", () => {
   assert.strictEqual(c.subsets.length, 4);
   assert(c.subsets[0].includes("q0"));
   assert.strictEqual(c.minimal.names.length, 3);
+  assert.deepStrictEqual(c.merged.map((m) => m.join(" ")), ["A C", "B", "D"]);
   assert.deepStrictEqual(c.samples.yes.slice(0, 2), ["aa", "aaa"]);
   // the empty set is drawn as ∅, a dead state
   const d = R.convertRegex("a b", "ab");

@@ -316,8 +316,9 @@ export interface RegexConversion {
   dfa: AutomatonModel;
   /** subsets[i]: the NFA states that DFA state i stands for (empty for ∅) */
   subsets: string[][];
-  /** the smallest DFA, states q0, q1, … */
+  /** the smallest DFA, states q0, q1, …; merged[i] lists the DFA states (A, B, …) that q_i stands for */
   minimal: AutomatonModel;
+  merged: string[][];
   samples: { yes: string[]; no: string[] };
 }
 
@@ -329,12 +330,14 @@ export function convertRegex(alphabetSrc: string, src: string): RegexConversion 
     const nfaNames = Array.from({ length: nfa.n }, (_, i) => "q" + i);
     const dfa = nfaToDfa(nfa);
     const subsets = dfa.labels!.map((set) => set.map((i) => nfaNames[i]));
-    const min = minimize(dfa).dfa;
+    const dfaNames = subsetNames(subsets);
+    const { dfa: min, classOf } = minimize(dfa);
     return {
       nfa: modelFromNfa(nfa, nfaNames),
-      dfa: modelFromDfa(dfa, subsetNames(subsets)),
+      dfa: modelFromDfa(dfa, dfaNames),
       subsets,
       minimal: modelFromDfa(min),
+      merged: mergedNames(min.n, classOf, dfaNames),
       samples: { yes: sampleStrings(min, true, 7), no: sampleStrings(min, false, 7) },
     };
   } catch (e) { throw tag(e, "input"); }
