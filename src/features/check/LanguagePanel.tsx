@@ -1,14 +1,15 @@
-/** The language band: pick an example or write your own, and see it typeset with sample strings. */
+/** The language band: an example or your own description, typeset with sample strings. */
 import { useId, useRef } from "react";
 import type { Dispatch } from "react";
 import type { Action, Derived, WorkbenchState } from "../../state/useWorkbench.ts";
 import { EXAMPLES } from "../../state/examples.ts";
 import { FieldError, selectInInput } from "../../ui/FieldError.tsx";
-import { StringToken } from "../../ui/StringToken.tsx";
+import { AlphabetField } from "../../ui/AlphabetField.tsx";
+import { SampleStrings } from "../../ui/SampleStrings.tsx";
 import { Definition } from "../../ui/Typeset.tsx";
 import { Segmented } from "../../ui/Segmented.tsx";
 
-/** Condition forms the description parser understands, shown under "Condition syntax". Each is written one way only. */
+/** The description forms, shown under "Condition syntax". */
 const SYNTAX: [string, string][] = [
   ["#_ab(w) = 1", "how often ab appears"],
   ["#_bab(w) > 0", "contains bab"],
@@ -31,7 +32,7 @@ const SPEC_HELP = (
   </details>
 );
 
-/** The language band. onTry runs a sample string through "Try a string". */
+/** `onTry` runs a sample string through "Try a string". */
 export function LanguagePanel({ state, derived, dispatch, onTry }: {
   state: WorkbenchState;
   derived: Derived;
@@ -39,20 +40,18 @@ export function LanguagePanel({ state, derived, dispatch, onTry }: {
   onTry: (w: string) => void;
 }) {
   const mode = state.example === "own" ? "own" : "examples";
-  const ids = { ex: useId(), alpha: useId(), lang: useId(), help: useId(), err: useId(), alphaErr: useId() };
+  const ids = { ex: useId(), lang: useId(), help: useId(), err: useId() };
   const langRef = useRef<HTMLTextAreaElement>(null);
-  const alphaRef = useRef<HTMLInputElement>(null);
   const err = derived.languageError;
-  // an empty description is still being written, so it is not reported as an error
+  // an empty description is still being written, not an error
   const showErr = err && (err.field === "alphabet" || state.language.trim() !== "");
   const langErr = showErr && err!.field === "language" ? err : null;
   const alphaErr = showErr && err!.field === "alphabet" ? err : null;
 
-
   return (
     <section className="band" aria-labelledby="lang-heading">
       <div className="band-inner">
-        <div className="band-inputs">
+        <div>
           <div className="lang-head">
             <h2 id="lang-heading" className="h-section">The language</h2>
             <Segmented labelledBy="lang-heading" value={mode}
@@ -62,7 +61,7 @@ export function LanguagePanel({ state, derived, dispatch, onTry }: {
 
           {mode === "examples" ? (
             <>
-            {/* phones get a compact list instead of the cards, so the definition and the answer stay near the top */}
+            {/* phones get a compact list instead of the cards (see app.css) */}
             <div className="examples-select field">
               <label htmlFor={ids.ex + "-select"} className="sr-only">Example language</label>
               <select id={ids.ex + "-select"} value={state.example === "own" ? "" : state.example}
@@ -88,16 +87,7 @@ export function LanguagePanel({ state, derived, dispatch, onTry }: {
             </>
           ) : (
             <>
-              <div className="row">
-                <div className="field field-narrow">
-                  <label htmlFor={ids.alpha}>Alphabet Σ</label>
-                  <input id={ids.alpha} ref={alphaRef} className="mono" type="text" value={state.alphabet}
-                    spellCheck={false} autoComplete="off" autoCapitalize="off"
-                    aria-invalid={!!alphaErr} aria-describedby={alphaErr ? ids.alphaErr : undefined}
-                    onChange={(e) => dispatch({ type: "alphabet", value: e.target.value })} />
-                </div>
-              </div>
-              {alphaErr && <FieldError id={ids.alphaErr} error={alphaErr} source={state.alphabet} onLocate={() => selectInInput(alphaRef.current, alphaErr.from ?? 0, alphaErr.to ?? 0)} />}
+              <AlphabetField value={state.alphabet} error={alphaErr} onChange={(value) => dispatch({ type: "alphabet", value })} />
               <div className="field">
                 <label htmlFor={ids.lang}>All strings w such that…</label>
                 <textarea id={ids.lang} ref={langRef} className="mono" rows={2} value={state.language}
@@ -116,14 +106,7 @@ export function LanguagePanel({ state, derived, dispatch, onTry }: {
           {derived.language ? (
             <>
               <p className="definition"><Definition alphabet={derived.language.alphabet} text={state.language} /></p>
-              {derived.samples && (
-                <dl className="samples">
-                  <dt>In <i className="math">L</i></dt>
-                  <dd>{derived.samples.yes.length ? derived.samples.yes.map((w) => <StringToken key={w} value={w} onTry={onTry} />) : <span className="muted">no strings at all</span>}</dd>
-                  <dt>Not in <i className="math">L</i></dt>
-                  <dd>{derived.samples.no.length ? derived.samples.no.map((w) => <StringToken key={w} value={w} onTry={onTry} />) : <span className="muted">none: every string is in the language</span>}</dd>
-                </dl>
-              )}
+              {derived.samples && <SampleStrings samples={derived.samples} of={<i className="math">L</i>} onTry={onTry} />}
               <p className="help">Check these match what you meant before answering.</p>
             </>
           ) : (

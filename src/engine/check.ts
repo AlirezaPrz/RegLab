@@ -1,7 +1,6 @@
 /**
- * The study-session layer over the engine: turns what the student typed into everything the UI
- * shows, as plain data (verdicts, counterexamples, hints, traces, diagram models). Components
- * only render these results; no automata logic lives in them.
+ * The study layer over the engine: turns what the student typed into what the UI shows, as plain
+ * data (verdicts, counterexamples, hints, traces, diagram models). No automata logic lives in components.
  */
 import {
   type DFA, type NFA, type ParsedAutomaton, type Remember,
@@ -10,7 +9,7 @@ import {
 } from "./engine.ts";
 
 
-/** The reference language, given by a description, ready to check answers against. */
+/** The language answers are checked against, given by a description. */
 export interface Language {
   alphabet: string[];
   /** its minimal DFA */
@@ -19,7 +18,7 @@ export interface Language {
   text: string;
 }
 
-/** Reads the alphabet and the description of the language. Throws EngineError with `field` naming the input that is wrong. */
+/** Throws an EngineError whose `field` names the input at fault. */
 export function readLanguage(alphabetSrc: string, src: string): Language {
   const alphabet = readAlphabet(alphabetSrc);
   try { return { alphabet, dfa: parseSpec(src, alphabet), text: src }; }
@@ -30,19 +29,20 @@ function readAlphabet(src: string): string[] {
   try { return parseAlphabet(src); } catch (e) { throw tag(e, "alphabet"); }
 }
 
-/** The shortest strings in and not in the language, for the student to sanity-check their description. */
-export function samples(lang: Language, limit = 7): { yes: string[]; no: string[] } {
-  return { yes: sampleStrings(lang.dfa, true, limit), no: sampleStrings(lang.dfa, false, limit) };
+/** The shortest strings in and not in a language. */
+export interface Samples { yes: string[]; no: string[] }
+
+const samplesOf = (d: DFA, limit = 7): Samples => ({ yes: sampleStrings(d, true, limit), no: sampleStrings(d, false, limit) });
+
+/** Samples of the language, so the student can check the description says what they meant. */
+export function samples(lang: Language, limit = 7): Samples {
+  return samplesOf(lang.dfa, limit);
 }
 
-/** A state of the DFA in the hints, with what it means. */
+/** A state of the hints' DFA, with what it means. */
 export interface StateNote {
   name: string;
-  /**
-   * What is true of w exactly when the DFA is in this state after reading w, in description
-   * notation. null for a merged state with no short description (dead: no extension of w is in L;
-   * all: every extension is).
-   */
+  /** what is true of w exactly when the DFA is here, in description notation; null for a sink with no short form */
   says: string | null;
   sink: "dead" | "all" | null;
   start: boolean;
@@ -51,24 +51,18 @@ export interface StateNote {
   example: string;
 }
 
-/**
- * The hints, in the order they open: what a DFA for the language has to remember; its states and
- * what each means; the DFA itself with a regular expression (the full solution); and the smallest
- * DFA, with the states it merges.
- */
+/** The hints, in opening order: what to remember, the states, the solution (DFA and regex), the smallest DFA. */
 export interface Hints {
   remember: Remember[];
-  /** the DFA built from what the description keeps track of (see explainSpec) */
+  /** built from what the description tracks (see explainSpec) */
   dfa: AutomatonModel;
   states: StateNote[];
-  /** the smallest DFA, states p0, p1, …; merged[i] lists the states of `dfa` that p_i stands for */
+  /** states p0, p1, …; merged[i] lists the states of `dfa` that p_i stands for */
   smallest: AutomatonModel;
   merged: string[][];
-  /** a regular expression for the language, built from the DFA by state elimination */
   regex: string;
 }
 
-/** The hints for a language. */
 export function hints(lang: Language): Hints {
   const ex = explainSpec(lang.text, lang.alphabet);
   const { dfa: min, classOf } = minimize(ex.dfa);
@@ -85,33 +79,33 @@ export function hints(lang: Language): Hints {
   };
 }
 
-/** For each state of a minimal DFA, the names of the states it merges (classOf maps old states to new ones). */
+/** For each state of a minimal DFA, the names of the states it merges. */
 function mergedNames(n: number, classOf: number[], names: string[]): string[][] {
   return Array.from({ length: n }, (_, i) => names.filter((_, s) => classOf[s] === i));
 }
 
 
-/** How the student answers: a regular expression, or a DFA/NFA written as transitions. */
+/** A regex, or a DFA/NFA written as transitions. */
 export type AnswerSource = "regex" | "automaton";
 
-/** A diagram-ready description of an automaton. */
+/** An automaton ready to draw. */
 export interface AutomatonModel {
   names: string[];
   start: number;
   accept: boolean[];
-  /** one entry per (from, to) pair, symbols merged */
+  /** one per (from, to) pair, symbols merged */
   edges: { from: number; to: number; symbols: string[] }[];
 }
 
 /**
- * A parsed answer. Every kind has a total DFA for its language; automaton answers also keep the
- * student's own states, and their DFA is the subset construction (labels are sets of student states).
+ * A parsed answer with a total DFA for its language. Automaton answers keep the student's states;
+ * their DFA is the subset construction, labelled by sets of those states.
  */
 export type Answer =
   | { kind: "regex"; dfa: DFA }
   | { kind: "dfa" | "nfa"; dfa: DFA<number[]>; parsed: ParsedAutomaton; model: AutomatonModel };
 
-/** Parses an answer. An automaton counts as a DFA only if it is deterministic; otherwise it is checked as an NFA. Throws EngineError tagged "answer". */
+/** A nondeterministic automaton is checked as an NFA. Throws an EngineError tagged "answer". */
 export function readAnswer(source: AnswerSource, src: string, alphabet: string[]): Answer {
   try {
     if (source === "regex") return { kind: "regex", dfa: regexToDfa(src, alphabet) };
@@ -122,33 +116,29 @@ export function readAnswer(source: AnswerSource, src: string, alphabet: string[]
 }
 
 
-/** too-generous: accepts strings outside L; too-strict: rejects strings in L; both: does both. */
+/** too-generous accepts strings outside L; too-strict rejects strings in L. */
 export type Verdict = "correct" | "too-generous" | "too-strict" | "both";
 
-/** State count of a correct DFA answer against the minimum. */
+/** A correct DFA's states against the minimum. */
 export interface StateReport {
-  /** states the student wrote */
   written: number;
-  /** a DFA with missing moves implicitly has one more, rejecting, dead state */
+  /** missing moves imply one more, rejecting, state */
   impliedDead: boolean;
-  /** written + implied dead state */
   total: number;
-  /** states in the minimal DFA */
   min: number;
-  /** groups of states that behave identically (names; the implied dead state is null) */
+  /** groups of equivalent states, by name; null is the implied dead state */
   mergeable: (string | null)[][];
-  /** written states never reached from the start */
   unreachable: string[];
 }
 
-/** Wrong DFA only: u and v reach the same state, but the suffix z sends exactly one of them into L. */
+/** u and v reach the same state of a wrong DFA, but z sends exactly one of them into L. */
 export interface ConflatedStrings {
   u: string;
   v: string;
   z: string;
   uIn: boolean;
   vIn: boolean;
-  /** the student's state both strings reach (index into model.names); null for the implied dead state */
+  /** index into model.names; null for the implied dead state */
   studentState: number | null;
   stateName: string | null;
 }
@@ -161,28 +151,26 @@ export interface Feedback {
   extra: string | null;
   /** shortest string wrongly rejected */
   missing: string | null;
-  minStates: number;
   /** wrong DFA only */
   conflated: ConflatedStrings | null;
   /** correct DFA only */
   states: StateReport | null;
-  /** answer was nondeterministic and checked as an NFA */
   nfa: boolean;
-  /** DFA with missing moves: [state, symbol] pairs, treated as rejecting */
+  /** [state, symbol] pairs with no move, treated as rejecting */
   missingMoves: [string, string][];
 }
 
 type AutomatonAnswer = Extract<Answer, { parsed: ParsedAutomaton }>;
 
-/** Name of a subset-construction state in terms of the student's states; null for the empty (dead) set. */
+/** A subset-construction state named by the student's states; null for the empty set. */
 function subsetName(ans: AutomatonAnswer, s: number): string | null {
   const set = ans.dfa.labels![s];
   return set.length ? set.map((i) => ans.parsed.names[i]).join(",") : null;
 }
 
 /**
- * Checks an answer against the language. The confused-strings explanation is only given for DFAs:
- * for an NFA or regex the shared state would be a construction artefact, not something the student wrote.
+ * Conflated strings are only reported for DFAs: for an NFA or regex the shared state would be a
+ * construction artefact, not something the student wrote.
  */
 export function checkAnswer(ans: Answer, lang: Language): Feedback {
   const res = compare(ans.dfa, lang.dfa);
@@ -192,7 +180,6 @@ export function checkAnswer(ans: Answer, lang: Language): Feedback {
     correct: res.correct,
     extra: res.extra,
     missing: res.missing,
-    minStates: res.minStates,
     conflated: null,
     states: null,
     nfa: ans.kind === "nfa",
@@ -201,7 +188,7 @@ export function checkAnswer(ans: Answer, lang: Language): Feedback {
 
   if (!res.correct && ans.kind === "dfa" && res.conflated) {
     const { u, v, z, uIn, vIn, sharedState: state } = res.conflated;
-    // for a DFA every subset has at most one state; the empty set is the implied dead state
+    // a DFA's subsets hold at most one state; the empty set is the implied dead state
     fb.conflated = { u, v, z, uIn, vIn, studentState: ans.dfa.labels![state][0] ?? null, stateName: subsetName(ans, state) };
   }
 
@@ -217,7 +204,7 @@ export function checkAnswer(ans: Answer, lang: Language): Feedback {
       if (!groups.has(c)) groups.set(c, []);
       groups.get(c)!.push(subsetName(ans, i));
     });
-    // the subset construction only creates reachable subsets, so their members are the reachable states
+    // the subset construction only builds reachable subsets
     const reachable = new Set(ans.dfa.labels!.flat());
     fb.states = {
       written, impliedDead, total, min: res.minStates,
@@ -231,26 +218,26 @@ export function checkAnswer(ans: Answer, lang: Language): Feedback {
 
 /** One step of a string's path through the student's automaton. */
 export interface ProbeStep {
-  /** student's states active at this point (indices into model.names); empty when stuck */
+  /** active states (indices into model.names); empty when stuck */
   states: number[];
-  /** symbol read to get here (null for the start) */
+  /** null for the start */
   symbol: string | null;
 }
 
 /** The result of "Try a string". */
 export interface Probe {
-  /** the string as tested (spaces and ε removed) */
+  /** spaces and ε removed */
   input: string;
-  /** first symbol outside the alphabet, if any */
+  /** first symbol outside the alphabet */
   foreign: string | null;
   inLanguage: boolean;
-  /** null when there is no answer yet */
+  /** null until there is a checked answer */
   accepted: boolean | null;
-  /** path through the student's automaton; null for regex answers */
+  /** null for regex answers */
   path: ProbeStep[] | null;
 }
 
-/** Runs a string against the language and, when there is a checked answer, through the answer. Spaces and ε are ignored. */
+/** Runs a string against the language and, once checked, through the answer. */
 export function probe(raw: string, lang: Language, ans: Answer | null): Probe {
   const input = raw.replace(/\s+/g, "").replace(/[εϵλ]/g, "");
   const foreign = [...input].find((c) => !lang.alphabet.includes(c)) ?? null;
@@ -266,8 +253,7 @@ export function probe(raw: string, lang: Language, ans: Answer | null): Probe {
 }
 
 
-/** A diagram model of a DFA, with states named q0, q1, … unless `names` are given. */
-export function modelFromDfa(d: DFA, names = d.accept.map((_, i) => "q" + i)): AutomatonModel {
+function modelFromDfa(d: DFA, names = d.accept.map((_, i) => "q" + i)): AutomatonModel {
   return {
     names,
     start: d.start,
@@ -276,8 +262,7 @@ export function modelFromDfa(d: DFA, names = d.accept.map((_, i) => "q" + i)): A
   };
 }
 
-/** A diagram model of the student's automaton, with the student's state names. */
-export function modelFromParsed(p: ParsedAutomaton): AutomatonModel {
+function modelFromParsed(p: ParsedAutomaton): AutomatonModel {
   return {
     names: [...p.names],
     start: p.nfa.start,
@@ -286,7 +271,6 @@ export function modelFromParsed(p: ParsedAutomaton): AutomatonModel {
   };
 }
 
-/** A diagram model of an NFA, ε-moves included. */
 function modelFromNfa(nfa: NFA, names: string[]): AutomatonModel {
   const list: { from: number; to: number; sym: string }[] = [];
   for (let s = 0; s < nfa.n; s++) {
@@ -308,21 +292,20 @@ function mergeEdges(list: { from: number; to: number; sym: string }[]): Automato
 }
 
 
-/** What the regex → automata converter shows. */
+/** Regex → automata. */
 export interface RegexConversion {
-  /** the NFA built from the regex by induction on its structure (see regexToNfa), states q0, q1, … */
+  /** built by induction on the regex (see regexToNfa) */
   nfa: AutomatonModel;
-  /** the subset construction applied to that NFA, states A, B, … and ∅ for the empty set */
+  /** the subset construction on it: states A, B, …, and ∅ for the empty set */
   dfa: AutomatonModel;
-  /** subsets[i]: the NFA states that DFA state i stands for (empty for ∅) */
+  /** the NFA states behind each DFA state */
   subsets: string[][];
-  /** the smallest DFA, states q0, q1, …; merged[i] lists the DFA states (A, B, …) that q_i stands for */
+  /** merged[i] lists the DFA states that minimal state i stands for */
   minimal: AutomatonModel;
   merged: string[][];
-  samples: { yes: string[]; no: string[] };
+  samples: Samples;
 }
 
-/** Converts a regular expression into an NFA, the DFA the subset construction makes from it, and the smallest DFA. */
 export function convertRegex(alphabetSrc: string, src: string): RegexConversion {
   const alphabet = readAlphabet(alphabetSrc);
   try {
@@ -338,41 +321,36 @@ export function convertRegex(alphabetSrc: string, src: string): RegexConversion 
       subsets,
       minimal: modelFromDfa(min),
       merged: mergedNames(min.n, classOf, dfaNames),
-      samples: { yes: sampleStrings(min, true, 7), no: sampleStrings(min, false, 7) },
+      samples: samplesOf(min),
     };
   } catch (e) { throw tag(e, "input"); }
 }
 
-/** Letters for the subset-construction states, in the order they were built (A … Z, then AA, AB, …), and ∅ for the empty set. */
+/** A … Z, AA, AB, … in build order, and ∅ for the empty set. */
 function subsetNames(subsets: string[][]): string[] {
   let k = 0;
   const letters = (i: number): string => (i < 26 ? "" : letters(Math.floor(i / 26) - 1)) + String.fromCharCode(65 + (i % 26));
   return subsets.map((set) => (set.length ? letters(k++) : "∅"));
 }
 
-/** What the automaton → regex converter shows. */
+/** Automaton → regex. */
 export interface AutomatonConversion {
-  /** the automaton as written */
   model: AutomatonModel;
-  /** "nfa" when it has ε-moves or more than one move on a symbol */
   kind: "dfa" | "nfa";
-  /** a regular expression for its language, by state elimination */
   regex: string;
-  /** what the states were eliminated from: the automaton as written, or its smallest DFA when that gave a shorter expression */
+  /** whichever gave the shorter regex: the automaton as written, or its smallest DFA */
   eliminatedFrom: "automaton" | "smallest";
   /** states in the smallest DFA */
   minStates: number;
-  samples: { yes: string[]; no: string[] };
+  samples: Samples;
 }
 
-/** Converts an automaton written as transitions into a regular expression for its language. */
 export function convertAutomaton(alphabetSrc: string, src: string): AutomatonConversion {
   const alphabet = readAlphabet(alphabetSrc);
   try {
     const parsed = parseAutomaton(src, alphabet);
     const min = minimize(nfaToDfa(parsed.nfa)).dfa;
-    // eliminating from the student's own automaton gives an expression that follows it; the
-    // smallest DFA sometimes gives a shorter one. Ties go to the student's automaton.
+    // the student's own automaton gives a regex that follows it; ties go to it
     const own = nfaToRegex(parsed.nfa), small = dfaToRegex(min);
     return {
       model: modelFromParsed(parsed),
@@ -380,15 +358,12 @@ export function convertAutomaton(alphabetSrc: string, src: string): AutomatonCon
       regex: small.length < own.length ? small : own,
       eliminatedFrom: small.length < own.length ? "smallest" : "automaton",
       minStates: min.n,
-      samples: { yes: sampleStrings(min, true, 7), no: sampleStrings(min, false, 7) },
+      samples: samplesOf(min),
     };
   } catch (e) { throw tag(e, "input"); }
 }
 
-/**
- * Writes an automaton in the transition format parseAutomaton reads, so a converted automaton
- * can be copied or converted back. States with no moves are left out unless they are the start.
- */
+/** The transition format parseAutomaton reads. States with no moves are dropped unless they are the start. */
 export function automatonText(m: AutomatonModel): string {
   const used = new Set([m.start]);
   for (const e of m.edges) { used.add(e.from); used.add(e.to); }
@@ -400,20 +375,18 @@ export function automatonText(m: AutomatonModel): string {
 }
 
 
-/** An automaton as far as it has been written, drawn while the student types. */
+/** An automaton as far as it has been typed. */
 export interface Draft {
   /** null until there is a start line */
   model: AutomatonModel | null;
-  /** "nfa" once it has an ε-move or two moves on one symbol from one state */
   kind: "dfa" | "nfa";
-  /** lines that can't be read yet, left out of the drawing (1-based) */
+  /** 1-based lines that can't be read yet */
   skipped: number[];
 }
 
 /**
- * Reads an automaton the forgiving way: lines that can't be read yet are skipped, and states named
- * only on the accept line are drawn too. When the text is complete, the states are numbered as
- * parseAutomaton numbers them, so the drawing matches the checked answer.
+ * Reads an automaton forgivingly: unreadable lines are skipped and accept-only states still drawn.
+ * Complete text is numbered as parseAutomaton numbers it, so the drawing matches the checked answer.
  */
 export function draftAutomaton(src: string, alphabet: readonly string[]): Draft {
   let start: string | null = null;
@@ -447,10 +420,10 @@ export function draftAutomaton(src: string, alphabet: readonly string[]): Draft 
 }
 
 
-/** Which input an error belongs to, so it can be shown next to that field. "input" is the converter's regex or automaton. */
+/** The input an error belongs to; "input" is the converter's regex or automaton. */
 export type Field = "alphabet" | "language" | "answer" | "input";
 
-/** An engine error as display data. from/to are a character range in the input; line is 1-based. */
+/** An engine error as display data (see EngineError for the positions). */
 export interface InputError {
   field: Field;
   message: string;
@@ -459,14 +432,14 @@ export interface InputError {
   line?: number;
 }
 
-/** Marks an error with the input it came from; non-engine errors are wrapped so callers see one type. */
+/** Tags an error with its input, wrapping non-engine errors so callers see one type. */
 function tag(e: unknown, field: Field): EngineError & { field: Field } {
   const err = (e instanceof EngineError ? e : new EngineError(e instanceof Error ? e.message : String(e))) as EngineError & { field: Field };
   err.field = field;
   return err;
 }
 
-/** Turn anything thrown by readLanguage, readAnswer or the converters into display data. */
+/** Anything thrown by readLanguage, readAnswer or the converters, as display data. */
 export function toInputError(e: unknown, fallback: Field): InputError {
   const err = e as Partial<EngineError> & { field?: Field; message?: string };
   return { field: err.field ?? fallback, message: err.message ?? String(e), from: err.from, to: err.to, line: err.line };

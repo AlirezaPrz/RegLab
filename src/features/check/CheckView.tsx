@@ -1,19 +1,17 @@
-/** The regular-languages tool: the language band, the answer beside the verdict, and the hints below, wired to one workbench state. */
+/** The Regular Languages tool: the language band, the answer beside the verdict, and the hints below. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkbench } from "../../state/useWorkbench.ts";
 import { Diagram } from "../../diagram/LazyDiagram.tsx";
 import { Definition } from "../../ui/Typeset.tsx";
 import { Icon } from "../../ui/Icon.tsx";
+import { scrollBehavior } from "../../ui/motion.ts";
 import { LanguagePanel } from "./LanguagePanel.tsx";
 import { AnswerPanel } from "./AnswerPanel.tsx";
 import { FeedbackPanel, conflationClaimNumber } from "./FeedbackPanel.tsx";
 import { ProbePanel } from "./ProbePanel.tsx";
 import { StuckSection } from "./StuckSection.tsx";
 
-const scrollBehavior = (): ScrollBehavior =>
-  window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 
-/** The tool page; owns the workbench state and passes it down to the panels. */
 export function CheckView() {
   const { state, dispatch, derived } = useWorkbench();
   const probeRef = useRef<HTMLInputElement>(null);
@@ -21,13 +19,13 @@ export function CheckView() {
   const [bandHidden, setBandHidden] = useState(false);
   const verdictRef = useRef<HTMLHeadingElement>(null);
 
-  // on one-column layouts the verdict is below the fold, so bring it into view after a check
+  // in one column the verdict is below the fold, so bring it into view after a check
   useEffect(() => {
     if (!state.checked || window.innerWidth > 920) return;
     verdictRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
   }, [state.checked]);
 
-  // when the definition band scrolls away, a slim copy of the language stays pinned on top
+  // once the band scrolls away, a slim copy of the language is pinned on top
   useEffect(() => {
     const el = bandRef.current;
     if (!el) return;
@@ -47,12 +45,11 @@ export function CheckView() {
   const model = answer && answer.kind !== "regex" ? answer.model : null;
   const steps = derived.probe?.path ?? null;
   const stepIdx = derived.activeStep;
-  // the trace shows on the diagram only once a string has been typed or a step picked, so an empty box marks nothing
+  // nothing is traced until a string is typed or a step picked
   const tracing = state.probe.trim() !== "" || state.step !== null;
   const active = useMemo(() => (tracing && steps && stepIdx !== null ? new Set(steps[stepIdx].states) : undefined), [tracing, steps, stepIdx]);
   const marked = fb?.conflated?.studentState ?? null;
-  // the drawing beside the editor: the checked answer while it is current, so marks and traces line
-  // up with it; otherwise the automaton as far as it has been written
+  // the checked answer while current (so marks and traces line up), else the draft
   const draft = derived.draft;
   const drawing = model && !derived.stale
     ? { model, title: `Your ${answer!.kind.toUpperCase()}`, checked: true }

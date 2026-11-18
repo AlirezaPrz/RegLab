@@ -1,4 +1,3 @@
-/** Renders an automaton as an SVG state diagram (layout from layout.ts), with table and enlarged views. */
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { AutomatonModel } from "../engine/index.ts";
 import { layoutAutomaton, R, type Direction, type Pt } from "./layout.ts";
@@ -10,17 +9,17 @@ export interface DiagramProps {
   model: AutomatonModel;
   /** accessible name, e.g. "Your DFA" */
   title: string;
-  /** states to highlight (current states while tracing a string) */
+  /** states to highlight, e.g. while tracing a string */
   active?: ReadonlySet<number>;
-  /** a state to mark as the place something went wrong */
+  /** the state where something went wrong */
   marked?: number | null;
-  /** short text shown beside the marked state, e.g. "(2)" for the claim that names it */
+  /** shown beside the marked state, e.g. "(2)" for the claim that names it */
   markedTag?: string;
-  /** just the drawing, fitted to its box: no view switcher, no scrolling (for previews inside links) */
+  /** just the drawing, fitted to its box: no view buttons or scrolling (previews inside links) */
   bare?: boolean;
-  /** the active states are a dead end (no state at all) */
+  /** the trace has no active state left */
   stuck?: boolean;
-  /** shown faded, for an answer that changed since it was checked */
+  /** faded, for a result that is out of date */
   dimmed?: boolean;
 }
 
@@ -31,12 +30,12 @@ const arrow = (tip: Pt, dir: Pt, size = 8) => {
   return `M${tip.x} ${tip.y}L${bx + px * size * 0.45} ${by + py * size * 0.45}L${bx - px * size * 0.45} ${by - py * size * 0.45}Z`;
 };
 
-/** A state diagram with Diagram / Table / Enlarge views. */
+/** An SVG state diagram with Diagram / Table / Enlarge views. */
 export function AutomatonDiagram({ model, title, active, marked = null, markedTag, stuck = false, dimmed = false, bare = false }: DiagramProps) {
   const [view, setView] = useState<"diagram" | "table">("diagram");
   const [enlarged, setEnlarged] = useState(false);
   const [box, width] = useElementWidth<HTMLDivElement>();
-  // lay out both ways and keep whichever fits the frame at the larger scale (ties go left-to-right)
+  // lay out both ways and keep whichever fits at the larger scale (ties go left-to-right)
   const both = useMemo(() => ({ LR: layoutAutomaton(model, "LR"), TB: layoutAutomaton(model, "TB") }), [model]);
   const maxH = typeof window === "undefined" ? 720 : Math.max(360, window.innerHeight * 0.75);
   const fit = (l: { width: number; height: number }) => Math.min(1.15, (width || 640) / l.width, maxH / l.height);
@@ -51,7 +50,7 @@ export function AutomatonDiagram({ model, title, active, marked = null, markedTa
     if (enlarged && d && !d.open) d.showModal();
   }, [enlarged]);
 
-  // fit to the frame, but never shrink 13px labels below about 11px on screen: scroll instead
+  // fit the frame, but never shrink 13px labels below about 11px: scroll instead
   const minScale = 0.85;
   const scale = width ? Math.min(1.15, Math.max(minScale, width / layout.width)) : 1;
   const scrollable = view === "diagram" && width > 0 && layout.width * scale > width + 2;
@@ -65,7 +64,7 @@ export function AutomatonDiagram({ model, title, active, marked = null, markedTa
       className={"diagram-svg" + (dimmed ? " is-dimmed" : "")}
     >
       <title id={titleId}>{`${title}. ${desc}`}</title>
-      <g className="d-edges">
+      <g>
         <path className="d-edge" d={layout.start.d} />
         <path className="d-head" d={arrow(layout.start.tip, layout.start.dir)} />
         {layout.edges.map((e, i) => (
@@ -75,7 +74,7 @@ export function AutomatonDiagram({ model, title, active, marked = null, markedTa
           </g>
         ))}
       </g>
-      <g className="d-labels">
+      <g>
         {layout.edges.map((e, i) => (
           <g key={i} transform={`translate(${e.labelAt.x} ${e.labelAt.y})`}>
             <rect className="d-label-bg" x={-e.labelW / 2} y={-9} width={e.labelW} height={18} rx={4} />
@@ -83,10 +82,10 @@ export function AutomatonDiagram({ model, title, active, marked = null, markedTa
           </g>
         ))}
       </g>
-      <g className="d-states">
+      <g>
         {layout.states.map((st) => {
           const on = !!active?.has(st.id);
-          const cls = "d-state" + (on ? " is-active" : "") + (marked === st.id ? " is-marked" : "");
+          const cls = [on && "is-active", marked === st.id && "is-marked"].filter(Boolean).join(" ") || undefined;
           return (
             <g key={st.id} className={cls} transform={`translate(${st.x} ${st.y})`}>
               {on && <circle className="d-halo" r={R + 6} />}

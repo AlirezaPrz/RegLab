@@ -1,4 +1,3 @@
-/** On-screen keys for symbols that are hard to type (ε, ∅, +, *, parentheses). */
 import type { RefObject } from "react";
 
 const NAMES: Record<string, string> = {
@@ -11,12 +10,9 @@ const NAMES: Record<string, string> = {
   ",": "comma",
 };
 
-export const REGEX_KEYS = ["ε", "∅", "+", "*", "(", ")"];
+const REGEX_KEYS = ["ε", "∅", "+", "*", "(", ")"];
 
-/**
- * On-screen keys that type into an input at the caret. They don't take focus away from
- * the input, so a phone keyboard stays open.
- */
+/** Keys for hard-to-type symbols, inserted at the caret. They never take focus, so a phone keyboard stays open. */
 export function SymbolKeys({ target, value, onChange, keys = REGEX_KEYS, label }: {
   target: RefObject<HTMLInputElement | HTMLTextAreaElement | null>;
   value: string;

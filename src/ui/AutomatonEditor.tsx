@@ -1,4 +1,3 @@
-/** The text editor for an automaton written one transition per line, used for answers and in the converter. */
 import { useId, useRef, useState, type ReactNode } from "react";
 import type { InputError } from "../engine/index.ts";
 import { FieldError, lineRange, selectInInput } from "./FieldError.tsx";
@@ -7,9 +6,8 @@ import { SymbolKeys } from "./SymbolKeys.tsx";
 const PLACEHOLDER = "start: q0\naccept: q1\nq0 b q0\nq0 a q1\nq1 b q1\nq1 a q2\nq2 a,b q2";
 
 /**
- * A textarea with line numbers (the gutter mirrors its scroll, so they stay aligned), ε and comma
- * keys, and the error under it with its line marked. `submitHint` ends the help text, for example
- * how to check with the keyboard; onSubmit runs on Ctrl+Enter or ⌘+Enter.
+ * An automaton editor: a textarea with line numbers (the gutter follows its scroll), ε and comma keys,
+ * and the error underneath with its line marked. `onSubmit` runs on Ctrl/⌘+Enter; `submitHint` ends the help.
  */
 export function AutomatonEditor({ label, value, onChange, error, onSubmit, submitHint }: {
   label: string;

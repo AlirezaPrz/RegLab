@@ -1,10 +1,7 @@
 /**
- * The hints, as a ladder read top to bottom: what a DFA for the language has to remember, what each
- * of its states means, the full solution (which asks first), and the smallest DFA, or that the
- * solution already is the smallest. Each hint opens in place and stays open, and only the next one can be opened, so
- * there is one thing to do at a time. Nothing here says how many states there are: that is a hint
- * in itself. Everything closes when the language changes (the reducer resets the hints, and
- * CheckView remounts this section, which drops a pending confirmation).
+ * The hints, as a ladder: what to remember, what each state means, the full solution (asks first),
+ * and the smallest DFA. Hints open in order and stay open, so there is one action at a time. State
+ * counts are never shown, since the count is itself a hint. CheckView remounts this on a new language.
  */
 import { Fragment, useEffect, useId, useRef, useState, type Dispatch, type ReactNode } from "react";
 import { automatonText, type Hints, type StateNote } from "../../engine/index.ts";
@@ -15,6 +12,7 @@ import { StringToken } from "../../ui/StringToken.tsx";
 import { TypesetRegex, TypesetSpec } from "../../ui/Typeset.tsx";
 import { CopyButton } from "../../ui/CopyButton.tsx";
 import { MergeTable } from "../../ui/MergeTable.tsx";
+import { scrollBehavior } from "../../ui/motion.ts";
 import { StateMark } from "../../ui/StateMark.tsx";
 
 type Step = 1 | 2 | 3 | 4;
@@ -22,7 +20,7 @@ type Step = 1 | 2 | 3 | 4;
 const W = <i className="math">w</i>;
 const L = <i className="math">L</i>;
 
-/** Engine prose: strings over the alphabet come in `backticks`, and w is set as math. */
+/** Engine prose: `backticked` strings become tokens and w is set as math. */
 function Prose({ text }: { text: string }) {
   return (
     <>
@@ -33,7 +31,7 @@ function Prose({ text }: { text: string }) {
   );
 }
 
-/** The states with what each means and a shortest string that leads to each. */
+/** Each state with what it means and a shortest string reaching it. */
 function StateTable({ states }: { states: StateNote[] }) {
   return (
     <table className="ttable side-table">
@@ -62,7 +60,7 @@ function StateTable({ states }: { states: StateNote[] }) {
   );
 }
 
-/** A diagram, or its table when it has too many states to draw clearly. */
+/** A diagram, or its table past DRAW_LIMIT. */
 function Drawing({ hints, which }: { hints: Hints; which: "dfa" | "smallest" }) {
   const model = hints[which];
   const title = which === "dfa" ? "A DFA for this language" : "The smallest DFA for this language";
@@ -76,8 +74,7 @@ export function StuckSection({ state, hints, dispatch }: { state: WorkbenchState
   const [confirming, setConfirming] = useState(false);
   const titles = useRef<Partial<Record<Step, HTMLHeadingElement | null>>>({});
   const moved = useRef<Step | null>(null);
-  // a hint that has just opened (or the solution that has just closed) takes focus and comes into
-  // view under the pinned language bar, so the next thing to read is always where the eye is
+  // a hint that just opened (or the solution that just closed) takes focus and scrolls into view
   useEffect(() => {
     const step = moved.current;
     if (step === null) return;
@@ -85,7 +82,7 @@ export function StuckSection({ state, hints, dispatch }: { state: WorkbenchState
     const el = titles.current[step];
     if (!el) return;
     el.focus({ preventScroll: true });
-    el.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    el.scrollIntoView({ block: "start", behavior: scrollBehavior() });
   }, [state.hintsOpened]);
   if (!hints) return null;
 
@@ -158,7 +155,7 @@ export function StuckSection({ state, hints, dispatch }: { state: WorkbenchState
         </>
       ),
     },
-    // always after the solution: either the smaller DFA merging gives, or that the solution is already the smallest
+    // either the smaller DFA merging gives, or a note that the solution is already the smallest
     {
       step: 4, title: "The smallest DFA",
       promise: "Whether any states of the solution can be merged into a smaller DFA.",
@@ -192,7 +189,7 @@ export function StuckSection({ state, hints, dispatch }: { state: WorkbenchState
           {rungs.map((r) => {
             const isOpen = r.step <= opened, isNext = r.step === opened + 1;
             return (
-              <li key={r.step} className={"rung" + (isOpen ? " is-open" : isNext ? " is-next" : " is-later")}>
+              <li key={r.step} className={"rung" + (!isOpen && !isNext ? " is-later" : "")}>
                 <h3 ref={(el) => { titles.current[r.step] = el; }} tabIndex={-1} className="rung-title">{r.title}</h3>
                 {isOpen ? <div className="rung-body">{r.body()}</div> : (
                   <>

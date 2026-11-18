@@ -1,7 +1,6 @@
 /**
- * The example languages offered in the language picker; the first is the default. Some have a hint
- * DFA that is already the smallest, and some (ends in ab or bb, the two with lengths) have states the
- * smallest DFA merges, so the last hint has something to show.
+ * The example languages; the first is the default. Some have a hint DFA that is already the
+ * smallest, and some (ends in ab or bb, the two length ones) don't, so the last hint shows a merge.
  */
 export interface Example { name: string; alphabet: string; text: string }
 

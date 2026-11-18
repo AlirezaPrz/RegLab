@@ -1,4 +1,4 @@
-/* The regex ⇄ automata converter. Builds on the band, fields, results and diagrams in app.css; values from tokens.css. */
+/* The Regex ⇄ Automata converter, on top of app.css. */
 
 /* examples under the input */
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: var(--space-5); }
@@ -15,7 +15,7 @@
 .convert-machine { padding: var(--space-3) var(--space-4); border: 1px solid var(--band-rule); border-radius: var(--radius); background: var(--paper); min-height: 180px; }
 .convert-machine .out-empty { margin: var(--space-4) 0; }
 
-/* a stale result keeps full contrast: the note above it and the faded diagram say it is out of date */
+/* a stale result keeps full contrast; the note and the faded diagram mark it */
 .band-definition .is-stale .definition { color: var(--muted); }
 
 /* the regex, set like the definition it is */

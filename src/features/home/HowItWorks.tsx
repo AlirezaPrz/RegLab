@@ -1,4 +1,4 @@
-/** The landing page walkthrough: as the visitor scrolls four steps, a pinned mini version of the tool highlights the part each step describes. */
+/** The landing walkthrough: as four steps scroll by, a pinned mini tool highlights the part each describes. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { readLanguage, readAnswer, checkAnswer, samples } from "../../engine/index.ts";
 import { Definition } from "../../ui/Typeset.tsx";
@@ -6,7 +6,7 @@ import { StringToken } from "../../ui/StringToken.tsx";
 import { Diagram } from "../../diagram/LazyDiagram.tsx";
 import { Verdict, conflationClaimNumber } from "../check/FeedbackPanel.tsx";
 
-// A DFA for "exactly one a" that forgets to tell one a from two, so every part of the feedback appears.
+// a DFA for "exactly one a" that can't tell one a from two, so every part of the feedback appears
 const LANGUAGE = { alphabet: "a b", text: "#_a(w) = 1" };
 const ANSWER = "start: q0\naccept: q1\nq0 b q0\nq0 a q1\nq1 a,b q1";
 
@@ -38,10 +38,7 @@ function useMedia(query: string) {
   return match;
 }
 
-/**
- * The mini tool with the parts for `step` highlighted. `only` renders just those parts,
- * for phones, where each step carries its own copy instead of sharing a pinned stage.
- */
+/** The mini tool with `step`'s parts highlighted. On phones (`only`) each step renders just its own parts. */
 function Stage({ demo, step, only = false }: { demo: Demo; step: number; only?: boolean }) {
   const { lang, answer, fb, sample } = demo;
   const parts = [
@@ -79,7 +76,7 @@ export function HowItWorks() {
   const [step, setStep] = useState(0);
   const stepRefs = useRef<(HTMLLIElement | null)[]>([]);
   useEffect(() => {
-    // the step crossing the middle of the viewport is the active one
+    // the step crossing the middle of the viewport is current
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) if (e.isIntersecting) setStep(Number((e.target as HTMLElement).dataset.step));
     }, { rootMargin: "-50% 0px -50% 0px" });

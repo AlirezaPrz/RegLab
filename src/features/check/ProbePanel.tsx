@@ -1,4 +1,3 @@
-/** "Try a string": whether a string is in the language, whether the answer accepts it, and its path. */
 import { forwardRef, useId } from "react";
 import type { Dispatch } from "react";
 import type { AutomatonModel, Probe } from "../../engine/index.ts";
@@ -6,7 +5,7 @@ import { show } from "../../engine/index.ts";
 import type { Action, WorkbenchState } from "../../state/useWorkbench.ts";
 import { Icon } from "../../ui/Icon.tsx";
 
-/** "Try a string". Each step of the path is a button that highlights its states on the diagram. */
+/** "Try a string": is it in L, does the answer accept it, and its path. Each step highlights its states on the diagram. */
 export const ProbePanel = forwardRef<HTMLInputElement, {
   state: WorkbenchState;
   probe: Probe | null;
@@ -17,7 +16,7 @@ export const ProbePanel = forwardRef<HTMLInputElement, {
 }>(function ProbePanel({ state, probe: p, activeStep, model, kind, dispatch }, ref) {
   const ids = { input: useId(), out: useId() };
   const steps = p?.path ?? null;
-  // an NFA step is a set of states; a DFA step is one state, or none once a missing move is taken
+  // an NFA step is a set of states; a DFA step is one state, or none after a missing move
   const setName = (states: number[]) => {
     if (!model) return "";
     if (kind === "nfa") return states.length ? "{" + states.map((i) => model.names[i]).join(", ") + "}" : "∅";

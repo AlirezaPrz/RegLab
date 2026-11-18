@@ -1,7 +1,6 @@
-/** A segmented control, used for every either/or choice in the tool. */
 import { useRef } from "react";
 
-/** A segmented choice built as a radio group: arrow keys move between options. */
+/** A segmented control for every either/or choice: a radio group, so arrow keys move between options. */
 export function Segmented<T extends string>({ value, options, onChange, labelledBy }: {
   value: T;
   options: { value: T; label: string }[];

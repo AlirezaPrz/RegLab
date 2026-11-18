@@ -1,26 +1,21 @@
 /**
- * The automata engine: everything RegLab knows about regular languages.
+ * The automata engine: parsing, constructions and comparison for regular languages.
  *
- * Every input becomes a total DFA over a fixed alphabet: a regular expression in course
- * notation (an NFA built by induction on the expression, then subset construction), a language
- * description (one DFA whose states are combinations of what the description keeps track of), or a
- * DFA/NFA written as transitions. DFAs are then minimized (Moore partition refinement), compared,
- * and turned back into explanations.
+ * Every input becomes a total DFA over a fixed alphabet. Regexes go through an inductive NFA and
+ * the subset construction, descriptions through one DFA over the quantities they track, written
+ * automata through the subset construction. DFAs are then minimized (Moore), compared and explained.
  *
- * Erasable TypeScript only, with no DOM and no dependencies, so Node runs it directly in the
- * tests and Vite bundles it for the browser.
+ * Erasable TypeScript with no DOM or dependencies, so Node runs it directly in the tests.
  */
 
 export const EPS = "ε";
-/** Guards against descriptions whose product grows too large to explore in the browser. */
+/** Caps every BFS-built DFA so a pathological input can't hang the page. */
 const STATE_LIMIT = 20000;
 
 
 /**
- * Every error the engine throws for bad input. The message is written for students.
- * Where the problem is in the input:
- *   from/to  character range in the source text (0-based, `to` exclusive)
- *   line     1-based line number (automata)
+ * A problem in the student's input, with a message written for them. `from`/`to` locate it in the
+ * text (0-based, `to` exclusive); `line` locates it in an automaton (1-based).
  */
 export class EngineError extends Error {
   from?: number;
@@ -48,17 +43,15 @@ export interface DFA<L = unknown> {
   accept: boolean[];
   /** delta[s][i] is the state reached from s on alphabet[i] */
   delta: number[][];
-  /** what each state stands for when the DFA was built from something else (for example, the NFA states of a subset-construction state) */
+  /** what each state stands for when built from another machine, e.g. a set of NFA states */
   labels?: L[];
 }
 
 /**
- * Builds an explicit DFA from an implicit machine by breadth-first search from `init`.
- * States are compared by their JSON form, so `step` may return fresh arrays or tuples.
- * Only reachable states are created, and each is numbered the first time it is seen.
- * Throws EngineError past STATE_LIMIT states.
+ * Explores an implicit machine breadth-first from `init`, numbering states as they are first seen.
+ * States are keyed by their JSON, so `step` may return fresh arrays. Throws past STATE_LIMIT.
  */
-export function dfaFromMachine<S>(
+function dfaFromMachine<S>(
   alphabet: readonly string[],
   init: S,
   step: (s: S, ch: string) => S,
@@ -85,25 +78,9 @@ export function dfaFromMachine<S>(
   return { alphabet: [...alphabet], n: states.length, start: 0, accept: states.map((s) => !!accept(s)), delta, labels: states };
 }
 
-/** The DFA for the complement language. Swapping accepting states is only correct because d is total. */
-export function complement<L>(d: DFA<L>): DFA<L> {
-  return { ...d, accept: d.accept.map((a) => !a) };
-}
-
-/** Product construction over the same alphabet: a pair state accepts when f(a accepts, b accepts). */
-export function product(a: DFA, b: DFA, f: (x: boolean, y: boolean) => boolean): DFA<[number, number]> {
-  return dfaFromMachine<[number, number]>(
-    a.alphabet,
-    [a.start, b.start],
-    ([p, q], ch) => { const i = a.alphabet.indexOf(ch); return [a.delta[p][i], b.delta[q][i]]; },
-    ([p, q]) => f(a.accept[p], b.accept[q]),
-  );
-}
-
 /**
- * Minimizes d with Moore partition refinement and numbers the result in BFS order (start = 0).
- * Returns the minimal DFA and `classOf`, which maps each state of d to its state in the minimal
- * DFA, or -1 if it is unreachable.
+ * Moore partition refinement, numbered in BFS order (start = 0). `classOf` maps each state of d to
+ * its state in the result, or -1 if unreachable.
  */
 export function minimize(d: DFA): { dfa: DFA<never>; classOf: number[] } {
   const k = d.alphabet.length;
@@ -114,8 +91,8 @@ export function minimize(d: DFA): { dfa: DFA<never>; classOf: number[] } {
     const t = d.delta[order[i]][c];
     if (!reach[t]) { reach[t] = true; order.push(t); }
   }
-  // Round k groups states that agree on every string of length ≤ k. Groups only ever split,
-  // so the first round that does not add a group has reached the fixed point: Myhill–Nerode equivalence.
+  // round k groups states that agree on all strings of length ≤ k; groups only split, so the first
+  // round that adds none is the fixed point (Myhill–Nerode equivalence)
   let cls: number[] = d.accept.map((a) => (a ? 1 : 0));
   let count = 0;
   for (;;) {
@@ -168,7 +145,7 @@ export function trace(d: DFA, w: string): number[] | null {
   return path;
 }
 
-/** The shortest (then alphabetically first) string reaching each state, by BFS; undefined if unreachable. */
+/** A shortest string reaching each state (alphabetically first among ties); undefined if unreachable. */
 export function accessStrings(d: DFA): (string | undefined)[] {
   const acc: (string | undefined)[] = new Array(d.n);
   acc[d.start] = "";
@@ -180,8 +157,8 @@ export function accessStrings(d: DFA): (string | undefined)[] {
   return acc;
 }
 
-/** BFS over state pairs for the shortest w with pred(a accepts w, b accepts w); null if none exists. */
-export function witness(a: DFA, b: DFA, pred: (x: boolean, y: boolean) => boolean): string | null {
+/** The shortest w with pred(a accepts w, b accepts w), by BFS over state pairs; null if none. */
+function witness(a: DFA, b: DFA, pred: (x: boolean, y: boolean) => boolean): string | null {
   const seen = new Set([a.start + "," + b.start]);
   const q: [number, number, string][] = [[a.start, b.start, ""]];
   for (let i = 0; i < q.length; i++) {
@@ -195,7 +172,7 @@ export function witness(a: DFA, b: DFA, pred: (x: boolean, y: boolean) => boolea
   return null;
 }
 
-/** For each state, whether some state with accept === want can be reached from it. */
+/** Per state: can it reach a state whose acceptance is `want`? */
 function canReach(d: DFA, want: boolean): boolean[] {
   const live = d.accept.map((a) => a === want);
   for (let changed = true; changed;) {
@@ -205,16 +182,14 @@ function canReach(d: DFA, want: boolean): boolean[] {
   return live;
 }
 
-/**
- * The first `limit` strings, shortest first, that d accepts (want = true) or rejects (want = false).
- * The BFS only enters states that can still reach a wanted state, so it never wanders into a dead end.
- */
+/** The first `limit` strings, shortest first, that d accepts (want) or rejects (!want). */
 export function sampleStrings(d: DFA, want: boolean, limit: number): string[] {
   const live = canReach(d, want);
   const out: string[] = [];
   if (!live[d.start]) return out;
   const q: [number, string][] = [[d.start, ""]];
-  for (let i = 0; i < q.length && out.length < limit && i < 50000; i++) { // the cap bounds sparse languages
+  // only states that can still reach a wanted one are entered; the cap bounds sparse languages
+  for (let i = 0; i < q.length && out.length < limit && i < 50000; i++) {
     const [s, w] = q[i];
     if (d.accept[s] === want) out.push(w);
     d.alphabet.forEach((ch, c) => { const t = d.delta[s][c]; if (live[t]) q.push([t, w + ch]); });
@@ -223,7 +198,7 @@ export function sampleStrings(d: DFA, want: boolean, limit: number): string[] {
 }
 
 
-/** An NFA with ε-moves. States are 0..n-1; a symbol with no entry in trans has no move. */
+/** An NFA with ε-moves. States are 0..n-1; a missing entry in `trans` means no move. */
 export interface NFA {
   alphabet: string[];
   n: number;
@@ -233,14 +208,12 @@ export interface NFA {
   trans: Map<string, Set<number>>[];
   /** eps[s] is the set of states reached from s by one ε-move */
   eps: Set<number>[];
-  /** adds a state and returns its number */
   add(): number;
-  /** adds a move; ch may be ε */
+  /** `ch` may be ε */
   edge(from: number, ch: string, to: number): void;
 }
 
-/** An empty NFA over the alphabet, to be filled with add() and edge(). */
-export function newNfa(alphabet: readonly string[]): NFA {
+function newNfa(alphabet: readonly string[]): NFA {
   const nfa: NFA = {
     alphabet: [...alphabet], n: 0, start: 0, accept: new Set(), trans: [], eps: [],
     add: () => { nfa.trans.push(new Map()); nfa.eps.push(new Set()); return nfa.n++; },
@@ -252,7 +225,7 @@ export function newNfa(alphabet: readonly string[]): NFA {
   return nfa;
 }
 
-/** The ε-closure of a set of states, sorted so equal sets compare equal in dfaFromMachine. */
+/** The ε-closure of a set of states, sorted so equal sets get the same key. */
 function closure(nfa: NFA, set: Iterable<number>): number[] {
   const out = new Set(set), stack = [...out];
   while (stack.length) for (const t of nfa.eps[stack.pop()!]) if (!out.has(t)) { out.add(t); stack.push(t); }
@@ -260,9 +233,8 @@ function closure(nfa: NFA, set: Iterable<number>): number[] {
 }
 
 /**
- * Subset construction. labels[i] is the set of NFA states that DFA state i stands for.
- * A missing move leads to the empty set, a rejecting state with no way out. That is why
- * missing DFA transitions count as rejecting.
+ * Subset construction; `labels[i]` is the set of NFA states behind DFA state i. A missing move leads
+ * to the empty set, a rejecting trap, which is why missing DFA moves count as rejecting.
  */
 export function nfaToDfa(nfa: NFA): DFA<number[]> {
   return dfaFromMachine<number[]>(
@@ -288,12 +260,11 @@ export type RegexAst =
   | { t: "star"; a: RegexAst };
 
 /**
- * Parses a course-notation regular expression by recursive descent: union (+, | or ∪) binds
- * loosest, then concatenation, then *. ε (also ϵ, λ) is the empty string and ∅ the empty set.
- * Throws EngineError whose from/to point into `src` as typed, spaces included.
+ * Recursive descent over course notation: union (+, |, ∪) binds loosest, then concatenation, then *.
+ * ε (also ϵ, λ) is the empty string, ∅ the empty set. Error positions refer to `src` as typed.
  */
 export function parseRegex(src: string, alphabet: readonly string[]): RegexAst {
-  // the parser reads src without whitespace; srcAt maps back to where the student typed it
+  // parse without whitespace; srcAt maps each character back to the typed text
   const srcAt: number[] = [];
   let s = "";
   for (let i = 0; i < src.length; i++) if (!/\s/.test(src[i])) { s += src[i]; srcAt.push(i); }
@@ -344,12 +315,12 @@ export function parseRegex(src: string, alphabet: readonly string[]): RegexAst {
 }
 
 /**
- * An NFA for a regular expression, built by induction on its structure:
- * - a symbol is two states joined by that symbol; ε is one accepting state; ∅ is one rejecting state
- * - R + S: a new start state with ε-moves to the starts of R and S; both keep their accepting states
- * - RS: ε-moves from the accepting states of R to the start of S, whose accepting states are kept
- * - R*: a new accepting start state with an ε-move into R, and ε-moves from R's accepting states back to it
- * States are numbered as they are created, so the start state is always 0.
+ * An NFA for a regex, by induction on its structure:
+ * - symbol: two states joined by it; ε: one accepting state; ∅: one rejecting state
+ * - R + S: a new start with ε-moves into both; both keep their accepting states
+ * - RS: ε-moves from R's accepting states to the start of S
+ * - R*: a new accepting start with an ε-move into R, and ε-moves from R's accepting states back
+ * States are numbered as created, so the start is always 0.
  */
 export function regexToNfa(ast: RegexAst, alphabet: readonly string[]): NFA {
   const nfa = newNfa(alphabet);
@@ -389,10 +360,9 @@ export function regexToDfa(src: string, alphabet: readonly string[]): DFA<never>
 }
 
 
-/** A student's automaton as written, with states numbered in order of first appearance (start first). */
+/** An automaton as written, states numbered by first appearance (start first). */
 export interface ParsedAutomaton {
   nfa: NFA;
-  /** names[i] is the name the student gave state i */
   names: string[];
   /** no ε-moves and at most one move per state and symbol */
   deterministic: boolean;
@@ -410,9 +380,8 @@ export type AutomatonLine =
   | { t: "error"; message: string };
 
 /**
- * Reads an automaton line by line (1-based), skipping blank lines and comments (// or %). Both the
- * checker, which stops at the first bad line, and the drawing made while typing, which skips bad
- * lines, read lines this way.
+ * Reads an automaton line by line (1-based), skipping blanks and comments (`//`, `%`). Shared by
+ * parseAutomaton, which stops at the first bad line, and the draft drawing, which skips bad lines.
  */
 export function readAutomatonLines(src: string, alphabet: readonly string[]): { line: number; read: AutomatonLine }[] {
   const out: { line: number; read: AutomatonLine }[] = [];
@@ -440,13 +409,12 @@ export function readAutomatonLines(src: string, alphabet: readonly string[]): { 
 }
 
 /**
- * Parses an automaton written one line at a time; // and % start comments:
+ * Parses the transition format:
  *     start: q0
  *     accept: q1 q2
  *     q0 a q1
- *     q0 a,b q0        (several symbols at once)
- *     q1 ε q2          (makes it an NFA)
- * Throws EngineError; errors about one line carry `line`.
+ *     q0 a,b q0        several symbols at once
+ *     q1 ε q2          an ε-move makes it an NFA
  */
 export function parseAutomaton(src: string, alphabet: readonly string[]): ParsedAutomaton {
   const names: string[] = [], index = new Map<string, number>();
@@ -488,13 +456,14 @@ export function parseAutomaton(src: string, alphabet: readonly string[]): Parsed
 }
 
 
+/** The comparison operators of the description syntax. */
 const CMP: Record<string, (a: number, b: number) => boolean> = {
   "=": (a, b) => a === b, "!=": (a, b) => a !== b,
   ">=": (a, b) => a >= b, "<=": (a, b) => a <= b,
   ">": (a, b) => a > b, "<": (a, b) => a < b,
 };
 
-/** A string rewritten by replacements, with at[i] the source index of character i, so errors can point at what was typed. */
+/** A rewritten string; `at[i]` is the source index of character i, so errors point at the typed text. */
 interface Mapped { s: string; at: number[] }
 function replaceMapped(m: Mapped, re: RegExp, rep: string): Mapped {
   let s = "";
@@ -511,10 +480,10 @@ function replaceMapped(m: Mapped, re: RegExp, rep: string): Mapped {
   return { s, at };
 }
 
-/** A count test: modular (count mod m = r) or a comparison (count op k). */
+/** `count mod m = r`, or `count op k`. */
 type NumericTest = { mod: number; r: number; op?: undefined; k?: undefined } | { op: string; k: number; mod?: undefined; r?: undefined };
 
-/** Something a description talks about, which a DFA keeps track of while it reads w. */
+/** Something a description talks about, which its DFA tracks while reading w. */
 type Quantity =
   | { kind: "count"; pattern: string }
   | { kind: "length" }
@@ -537,15 +506,14 @@ type Condition =
 interface Description { cond: Condition; quantities: Quantity[]; tests: NumericTest[][] }
 
 /**
- * Parses a language description. Conditions:
+ * Parses a description. Conditions:
  *   #_ab(w) = 1        #_a(w) mod 2 = 0       |w| >= 3        sum mod 3 = 0     value mod 3 = 0
  *   starts with aba    ends in aa             first = last    first != last
- * combined with and, or, xor, not and parentheses (precedence: not, and, xor, or). Each form is
- * written one way only; the retired ones (contains, is even, divisible by, begins with, ends with,
- * length) get an error that names the form to use. Throws EngineError whose from/to point into `src`.
+ * joined by not, and, xor, or (tightest first) and parentheses. Each form has one spelling; retired
+ * ones (contains, is even, divisible by, begins with, ends with, length) name their replacement.
  */
 function parseDescription(src: string, alphabet: readonly string[]): Description {
-  // spell symbol operators as words, keeping a map back to src for error positions
+  // spell symbol operators as words, keeping positions mapped back to src
   let mapped: Mapped = { s: src, at: Array.from({ length: src.length + 1 }, (_, i) => i) };
   for (const [re, rep] of [
     [/≥/g, ">="], [/≤/g, "<="], [/≠/g, "!="], [/==/g, "="],
@@ -569,7 +537,7 @@ function parseDescription(src: string, alphabet: readonly string[]): Description
     pos += m[0].length;
     return m;
   };
-  // a form that is written another way here: point at it and say how
+  // a spelling that is no longer accepted: point at it and name the replacement
   const retired = (re: RegExp, instead: (m: RegExpMatchArray) => string) => {
     ws();
     const at = pos, m = eat(re);
@@ -597,7 +565,7 @@ function parseDescription(src: string, alphabet: readonly string[]): Description
     return { t: "numeric", q: i, test };
   };
 
-  // "<quantity> = 2", "<quantity> >= 1", "<quantity> mod 3 = 0"
+  // "= 2", ">= 1", "mod 3 = 0" after a quantity
   function numericTest(what: string): NumericTest {
     let m: RegExpMatchArray | null;
     retired(/(?:is\s+)?(even|odd)\b/, (r) => `"mod 2 = ${r[1].toLowerCase() === "odd" ? 1 : 0}"`);
@@ -609,7 +577,7 @@ function parseDescription(src: string, alphabet: readonly string[]): Description
       return { mod: +m[1], r: +m[2] % +m[1] };
     }
     if ((m = eat(/(>=|<=|!=|=|>|<)\s*(\d+)/))) return { op: m[1], k: +m[2] };
-    // two unbounded counts (like #a = #b) cannot be tracked with finitely many states
+    // comparing two unbounded counts needs infinitely many states
     if (eat(/(>=|<=|!=|=|>|<)\s*#/)) fail("Comparing two counts with each other (like #a = #b) usually gives a language that is not regular, so it can't be described here.", condStart, tokenEnd(pos));
     ws();
     return fail(`After ${what}, expected a comparison such as "= 2", ">= 1" or "mod 3 = 0".`);
@@ -665,13 +633,13 @@ function parseDescription(src: string, alphabet: readonly string[]): Description
 }
 
 
-/** One thing a DFA for a description has to remember: `what` in description notation (or null), and its values in words, with strings over the alphabet in `backticks`. */
+/** One thing a description's DFA must remember: `what` in notation (or null) and its values in words, strings in `backticks`. */
 export interface Remember { what: string | null; text: string }
 
 /**
- * What a DFA remembers about one quantity: a value updated one symbol at a time. `parts` says what
- * a value means about w, in description notation, split into the parts that can vary on their own
- * (for #_ab(w): the count, and whether w ends in a).
+ * What the DFA remembers about one quantity, updated per symbol. `parts` says what a value means
+ * about w, in description notation, split into independently varying parts (for #_ab(w): the
+ * count, and whether w ends in a).
  */
 interface Tracker {
   init: unknown;
@@ -680,6 +648,7 @@ interface Tracker {
   parts(v: unknown): { key: string; says: string }[];
   remember: Remember[];
 }
+/** Erases the value type so trackers of different kinds share one list. */
 function tracker<V>(t: { init: V; step(v: V, ch: string): V; holds(v: V, c: Condition): boolean; parts(v: V): { key: string; says: string }[]; remember: Remember[] }): Tracker {
   return t as unknown as Tracker;
 }
@@ -687,9 +656,9 @@ function tracker<V>(t: { init: V; step(v: V, ch: string): V; holds(v: V, c: Cond
 const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
 const lcm = (a: number, b: number) => (a / gcd(a, b)) * b;
 const tick = (x: string) => "`" + x + "`";
-/** "x", "x or y", "x, y or z" */
+/** "x", "x or y", "x, y or z". */
 const listOr = (xs: string[]) => (xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " or " + xs[xs.length - 1]);
-/** 0 … n-1 in words: listed when short, as a range when long */
+/** 0 … n-1 in words: listed when short, a range when long. */
 const upTo = (n: number) => (n <= 6 ? listOr(Array.from({ length: n }, (_, i) => String(i))) : `0 to ${n - 1}`);
 
 /** The length of the longest prefix of v, at most `max` long, that t ends in. */
@@ -699,9 +668,9 @@ function longestPrefixSuffix(v: string, t: string, max: number): number {
 }
 
 /**
- * Exactly the strings whose longest suffix that is a prefix of v (at most `max` long) is v[0..p):
- * they end in v[0..p) and in no longer such prefix. Of the longer prefixes only the shortest are
- * named, since ending in a longer one means ending in a shorter one that it ends with.
+ * The strings whose longest suffix that is a prefix of v (at most `max` long) is v[0..p): they end
+ * in v[0..p) and in no longer such prefix. Only the minimal longer prefixes are negated, since
+ * ending in a longer one implies ending in a shorter one it ends with.
  */
 function endsClause(v: string, p: number, max: number): string {
   const mine = v.slice(0, p);
@@ -712,11 +681,10 @@ function endsClause(v: string, p: number, max: number): string {
 }
 
 /**
- * A number that only grows (a count, the length, a digit sum), kept exactly while it is below
- * `cap` and only as a remainder mod `mod` after that. The cap is the smallest number past which
- * every comparison already has its answer (k for ">= k" and "< k", k + 1 for the others); the
- * modulus is the lcm of the moduli used. A value s < cap is the number itself; s >= cap means the
- * number is at least cap and leaves remainder s - cap.
+ * A growing number (count, length, digit sum), kept exactly below `cap` and as a remainder mod
+ * `mod` from there. `cap` is where every comparison has its answer (k for ">= k" and "< k", else
+ * k + 1); `mod` is the lcm of the moduli. Encoding: s < cap is the number; s >= cap means at least
+ * cap with remainder s - cap.
  */
 function numberScale(name: string, tests: NumericTest[]) {
   const cap = Math.max(0, ...tests.map((t) => (t.op === undefined ? 0 : t.op === ">=" || t.op === "<" ? t.k : t.k + 1)));
@@ -728,9 +696,9 @@ function numberScale(name: string, tests: NumericTest[]) {
       : { what: name, text: `exactly while it is below ${cap}, then only its remainder mod ${mod}` };
   return {
     remember,
-    /** cap 0 and no modulus: every comparison has its answer from the start, so there is nothing to track */
+    /** every test has its answer from the start: nothing to track */
     trivial: cap === 0 && mod === 1,
-    /** past the cap with no modulus, growing further changes no answer */
+    /** no further growth can change an answer */
     settled: (s: number) => mod === 1 && s >= cap,
     add: (s: number, d: number) => (s < cap && s + d < cap ? s + d : cap + ((s < cap ? s + d : s - cap + d) % mod)),
     holds: (s: number, t: NumericTest) => (t.mod !== undefined ? (s < cap ? s : s - cap) % t.mod === t.r : CMP[t.op](Math.min(s, cap), t.k)),
@@ -743,15 +711,15 @@ function numberScale(name: string, tests: NumericTest[]) {
 
 const testOf = (c: Condition) => (c as Extract<Condition, { t: "numeric" }>).test;
 
-/** A quantity whose tests all have the same answer for every string (like "#_a(w) >= 0"): nothing to remember. */
+/** A quantity whose tests answer the same for every string (like "#_a(w) >= 0"). */
 const constant = (holds: (c: Condition) => boolean) => tracker<number>({ init: 0, step: () => 0, holds: (_, c) => holds(c), parts: () => [], remember: [] });
 
 /** The tracker for a quantity, sized for the tests the description makes on it. */
 function makeTracker(q: Quantity, tests: NumericTest[], alphabet: readonly string[]): Tracker {
   switch (q.kind) {
     case "count": {
-      // the count, and how much of the next occurrence has just been read, so overlaps count.
-      // Once the count is settled, the progress is no longer needed (-1), so it stops splitting states.
+      // the count plus progress into the next occurrence (so overlaps count); once the count is
+      // settled the progress is dropped (-1) so it stops splitting states
       const v = q.pattern, n = numberScale(`#_${v}(w)`, tests), keep = v.length - 1;
       if (n.trivial) return constant((c) => n.holds(0, testOf(c)));
       return tracker<[number, number]>({
@@ -762,7 +730,7 @@ function makeTracker(q: Quantity, tests: NumericTest[], alphabet: readonly strin
           return [n.settled(next) ? -1 : longestPrefixSuffix(v, t, keep), next];
         },
         holds: ([, s], c) => n.holds(s, testOf(c)),
-        // progress -1 happens exactly when the count is settled, so it says what the count says
+        // progress is -1 exactly when the count is settled, so it says the same
         parts: ([p, s]) => [{ key: `n${s}`, says: n.says(s) }, ...(keep ? [{ key: `p${p}`, says: p < 0 ? n.says(s) : endsClause(v, p, keep) }] : [])],
         remember: [n.remember, ...(!keep ? []
           : keep === 1 ? [{ what: null, text: `whether w ends in ${tick(v[0])}, which could start the next ${tick(v)}` }]
@@ -780,7 +748,7 @@ function makeTracker(q: Quantity, tests: NumericTest[], alphabet: readonly strin
       return tracker<number>({ init: 0, step: (s, ch) => n.add(s, Number(ch)), holds: (s, c) => n.holds(s, testOf(c)), parts: (s) => [{ key: `n${s}`, says: n.says(s) }], remember: [n.remember] });
     }
     case "value": {
-      // the number's value mod m, read left to right; -1 until a digit has been read (ε has no value)
+      // value mod m, read left to right; -1 until a digit is read (ε has no value)
       const mod = tests.reduce((m, t) => lcm(m, t.mod!), 1);
       return tracker<number>({
         init: -1,
@@ -791,7 +759,7 @@ function makeTracker(q: Quantity, tests: NumericTest[], alphabet: readonly strin
       });
     }
     case "prefix": {
-      // how much of v has matched; v.length once it has, -1 after a mismatch
+      // how much of v has matched; v.length once it all has, -1 after a mismatch
       const v = q.pattern;
       const mismatches: string[] = [];
       for (let j = 0; j < v.length; j++) for (const c of alphabet) if (c !== v[j]) mismatches.push(`starts with ${v.slice(0, j) + c}`);
@@ -806,7 +774,7 @@ function makeTracker(q: Quantity, tests: NumericTest[], alphabet: readonly strin
       });
     }
     case "suffix": {
-      // the longest prefix of v that w ends in (KMP): a wrong symbol falls back, it never dies
+      // longest prefix of v that w ends in (KMP): a wrong symbol falls back, it never dies
       const v = q.pattern;
       return tracker<number>({
         init: 0,
@@ -819,7 +787,7 @@ function makeTracker(q: Quantity, tests: NumericTest[], alphabet: readonly strin
       });
     }
     case "firstLast":
-      // ε has no first or last symbol; it counts as "first = last", so "first != last" rejects it
+      // ε counts as "first = last", so "first != last" rejects it
       return tracker<[string, string] | null>({
         init: null,
         step: (st, ch) => [st ? st[0] : ch, ch],
@@ -830,7 +798,7 @@ function makeTracker(q: Quantity, tests: NumericTest[], alphabet: readonly strin
   }
 }
 
-/** The DFA a description defines, built from what it tracks: its states are combinations of the trackers' values. */
+/** The DFA a description defines, whose states are combinations of its trackers' values. */
 function trackedDfa(src: string, alphabet: readonly string[]) {
   const { cond, quantities, tests } = parseDescription(src, alphabet);
   const trackers = quantities.map((q, i) => makeTracker(q, tests[i], alphabet));
@@ -848,34 +816,32 @@ function trackedDfa(src: string, alphabet: readonly string[]) {
   return { dfa, trackers };
 }
 
-/** Parses a language description into its minimal DFA (see parseDescription for the forms). */
+/** A description's minimal DFA (see parseDescription for the syntax). */
 export function parseSpec(src: string, alphabet: readonly string[]): DFA<never> {
   return minimize(trackedDfa(src, alphabet).dfa).dfa;
 }
 
-/** A description's DFA in the form people design it, with the meaning of every state. */
+/** A description's DFA as people design it, with the meaning of every state. */
 export interface ExplainedSpec {
   /**
-   * The states are combinations of what the description tracks; the ones from which no string is
-   * accepted are merged into one dead state, and the ones from which every string is accepted
-   * into one state too. Otherwise nothing is merged, so it can be larger than the minimal DFA.
+   * States are combinations of what the description tracks. Only the sinks are merged (one dead
+   * state, one accept-everything state), so it can be larger than the minimal DFA.
    */
   dfa: DFA;
-  /** q0, q1, … in breadth-first order, and "dead" */
+  /** q0, q1, … in BFS order, and "dead" */
   names: string[];
   /**
-   * says[s]: what is true of w exactly when the DFA is in state s after reading w, in description
-   * notation (parseSpec(says[s]) is the set of strings that lead to s). null only for a merged
-   * state that has no short description.
+   * What is true of w exactly when the DFA is in each state, in description notation:
+   * parseSpec(says[s]) is the set of strings reaching s. null only for a sink with no short form.
    */
   says: (string | null)[];
-  /** "dead": no string is accepted from here; "all": every string is */
+  /** "dead": nothing is accepted from here; "all": everything is */
   sink: ("dead" | "all" | null)[];
-  /** what the DFA has to remember, in the order the description mentions it */
+  /** in the order the description mentions them */
   remember: Remember[];
 }
 
-/** Renumbers d in place so that state `s` comes last, keeping the order of the others. */
+/** Renumbers d in place so state `s` comes last. */
 function moveToEnd<L>(d: DFA<L>, s: number) {
   const order = [...Array.from({ length: d.n }, (_, i) => i).filter((i) => i !== s), s];
   const at = new Map(order.map((old, i) => [old, i]));
@@ -885,17 +851,17 @@ function moveToEnd<L>(d: DFA<L>, s: number) {
   d.start = at.get(d.start)!;
 }
 
-/** Builds the DFA for a description the way people design one, and says what each state means. */
+/** Builds a description's DFA the way people design one, and says what each state means. */
 export function explainSpec(src: string, alphabet: readonly string[]): ExplainedSpec {
   const { dfa: full, trackers } = trackedDfa(src, alphabet);
-  // each state's value, split into parts; part id "i.j" is part j of tracker i
+  // each state's value split into parts; id "i.j" is part j of tracker i
   const parts = full.labels!.map((vals) => trackers.flatMap((t, i) => t.parts(vals[i]).map((p, j) => ({ id: `${i}.${j}`, ...p }))));
-  // a conjunction of parts, each split into single clauses so that one said twice appears once
+  // a conjunction, split into single clauses so a clause said twice appears once
   const clausesOf = (says: string[]) => [...new Set(says.filter(Boolean).flatMap((x) => (/\bor\b/.test(x) ? [x] : x.split(" and "))))];
   const both = (clauses: string[]) => clauses.map((x) => (clauses.length > 1 && /\bor\b/.test(x) ? `(${x})` : x)).join(" and ");
   const conj = (says: string[]) => both(clausesOf(says));
 
-  // merge the states from which no string is accepted, and those from which every string is
+  // merge the sinks: states from which nothing, or everything, is accepted
   const canAccept = canReach(full, true), canReject = canReach(full, false);
   const sinkOf = (s: number) => (!canAccept[s] ? "dead" : !canReject[s] ? "all" : null);
   const cls = full.accept.map((_, s) => sinkOf(s) ?? s);
@@ -904,13 +870,10 @@ export function explainSpec(src: string, alphabet: readonly string[]): Explained
   const dfa = dfaFromMachine<number | string>(full.alphabet, cls[full.start], (c, ch) => cls[full.delta[rep.get(c)!][full.alphabet.indexOf(ch)]], (c) => full.accept[rep.get(c)!]);
 
   /**
-   * A short description of a merged state. First try values of single parts that occur only in
-   * its members, joined with "or", if together they cover all of them (e.g. "#_a(w) >= 2 or
-   * #_b(w) >= 2"). Failing that, find the fewest parts (two or three) whose values alone decide
-   * whether a state is a member, and join the members' value combinations with "or" (e.g.
-   * "#_aba(w) >= 1 and #_bab(w) >= 1"). A part's value describes exactly the strings that give it
-   * that value, so either way the description is exact. null when neither works with at most three
-   * alternatives, or when the state is the whole DFA (nothing to tell apart).
+   * A short, exact description of a merged sink, or null. First an "or" of single part values found
+   * only in its members ("#_a(w) >= 2 or #_b(w) >= 2"); failing that, the fewest parts (2–3) whose
+   * values alone decide membership, as an "or" of the members' combinations ("#_aba(w) >= 1 and
+   * #_bab(w) >= 1"). Gives up past three alternatives, or when the sink is the whole DFA.
    */
   const describeSink = (members: Set<number>): string | null => {
     if (members.size === full.n) return null;
@@ -955,7 +918,7 @@ export function explainSpec(src: string, alphabet: readonly string[]): Explained
     return null;
   };
 
-  // the dead state goes last, so tables read from the start state to the dead end
+  // the dead state goes last, so tables read from the start to the dead end
   const deadAt = dfa.labels!.indexOf("dead");
   if (deadAt >= 0) moveToEnd(dfa, deadAt);
   let k = 0;
@@ -963,10 +926,9 @@ export function explainSpec(src: string, alphabet: readonly string[]): Explained
   const names = labels.map((c) => (c === "dead" ? "dead" : "q" + k++));
   const sink = labels.map((c) => (typeof c === "string" ? (c as "dead" | "all") : null));
   /**
-   * Shortens a state's description without changing what it says: a state reached only by ε is
-   * "|w| = 0", and otherwise clauses are dropped one at a time (last first) as long as the rest
-   * still describes exactly the strings that reach the state, which is checked by parsing it.
-   * Skipped for large DFAs, where the checks would take too long.
+   * Shortens a description without changing its meaning: a state reached only by ε is "|w| = 0";
+   * otherwise clauses are dropped (last first) while the rest, parsed back, still matches exactly
+   * the strings reaching the state. Skipped for large DFAs, where checking is too slow.
    */
   const reachOf = (st: number): DFA => ({ ...dfa, accept: dfa.accept.map((_, i) => i === st), labels: undefined });
   const exact = (text: string, st: number) => compare(parseSpec(text, alphabet), reachOf(st)).correct;
@@ -990,11 +952,11 @@ export function explainSpec(src: string, alphabet: readonly string[]): Explained
 }
 
 
-/** Two strings that reach the same state of a DFA but must be told apart: exactly one of uz, vz is in L. */
+/** u and v reach the same state but must be told apart: exactly one of uz, vz is in L. */
 export interface Conflated {
-  /** |u| + |v| + |z|; the smallest example is kept */
+  /** |u| + |v| + |z|; the cheapest example wins */
   cost: number;
-  /** the state of the compared DFA (compare's `student` argument) that u and v both reach */
+  /** the state of compare's `student` DFA that u and v both reach */
   sharedState: number;
   u: string;
   v: string;
@@ -1012,11 +974,11 @@ export interface Comparison {
   missing: string | null;
   /** states in the minimal DFA of the reference language */
   minStates: number;
-  /** set only when the answer is wrong */
+  /** only when the answer is wrong */
   conflated?: Conflated | null;
 }
 
-/** Compares an answer DFA with the reference. Both counterexamples are shortest, found by BFS over state pairs. */
+/** Compares an answer with the reference; both counterexamples are shortest. */
 export function compare(student: DFA, reference: DFA): Comparison {
   const ref = minimize(reference).dfa;
   const extra = witness(student, ref, (a, b) => a && !b);
@@ -1026,10 +988,7 @@ export function compare(student: DFA, reference: DFA): Comparison {
   return result;
 }
 
-/**
- * Finds the cheapest pair u, v that the student's DFA merges but the reference separates,
- * plus a distinguishing suffix z. Only exists when the answer is wrong.
- */
+/** The cheapest u, v the student's DFA merges but the reference separates, with a suffix z telling them apart. */
 function findConflated(student: DFA, ref: DFA): Conflated | null {
   // shortest string reaching each reachable (student state, reference state) pair
   const seen = new Map([[student.start + "," + ref.start, ""]]);
@@ -1059,8 +1018,8 @@ function findConflated(student: DFA, ref: DFA): Conflated | null {
   return best;
 }
 
-/** BFS for the shortest distinguishing suffix of states p and q; null if they are equivalent. */
-export function distinguish(d: DFA, p: number, q: number): string | null {
+/** The shortest suffix telling states p and q apart; null if they are equivalent. */
+function distinguish(d: DFA, p: number, q: number): string | null {
   const seen = new Set([p + "," + q]);
   const queue: [number, number, string][] = [[p, q, ""]];
   for (let i = 0; i < queue.length; i++) {
@@ -1074,14 +1033,7 @@ export function distinguish(d: DFA, p: number, q: number): string | null {
   return null;
 }
 
-/** The Myhill–Nerode classes of a language: a shortest representative string per state of its minimal DFA. */
-export function nerodeClasses(reference: DFA): { rep: string; accepting: boolean }[] {
-  const min = minimize(reference).dfa;
-  const acc = accessStrings(min);
-  return acc.map((w, i) => ({ rep: w!, accepting: min.accept[i] }));
-}
-
-/** Parses an alphabet of single-character symbols separated by spaces or commas; braces are ignored. Throws EngineError. */
+/** Single-character symbols separated by spaces or commas; braces are ignored. */
 export function parseAlphabet(src: string): string[] {
   const chars = [...new Set(src.replace(/[\s,{}]/g, ""))];
   if (!chars.length) throw new EngineError("The alphabet is empty. Enter its symbols, for example: a b");
@@ -1096,7 +1048,7 @@ export function parseAlphabet(src: string): string[] {
 export const show = (w: string): string => (w === "" ? EPS : w);
 
 
-/** Regular expression tree used when building an expression from an automaton. */
+/** A regex tree for state elimination. */
 type Rx =
   | { t: "empty" }
   | { t: "eps" }
@@ -1119,13 +1071,13 @@ function printRx(r: Rx, ctx = 0): string {
     case "or": { const s = r.items.map((x) => printRx(x, 0)).join("+"); return ctx > 0 ? `(${s})` : s; }
   }
 }
-// the printed form doubles as a structural key for deduplication
+// the printed form doubles as a structural key
 const key = (r: Rx) => printRx(r);
 /** Whether r matches ε. */
 const nullable = (r: Rx): boolean =>
   r.t === "eps" || r.t === "star" || (r.t === "or" && r.items.some(nullable)) || (r.t === "cat" && r.items.every(nullable));
 
-/** Smart constructors: each applies only identities that keep the language the same (∅ and ε laws, idempotence). */
+/** Smart constructors: they apply only language-preserving identities (∅ and ε laws, idempotence). */
 function rxOr(xs: Rx[]): Rx {
   let items: Rx[] = [];
   for (const x of xs) items.push(...(x.t === "or" ? x.items : [x]));
@@ -1181,11 +1133,7 @@ function rxStar(a: Rx): Rx {
   return { t: "star", a };
 }
 
-/**
- * A regular expression for the language of d, in course notation, by state elimination on the
- * minimal DFA (dead state removed). The result always describes exactly L(d); the simplifications
- * only shorten it.
- */
+/** A regex for L(d) in course notation, by state elimination on its minimal DFA. */
 export function dfaToRegex(d: DFA): string {
   const min = minimize(d).dfa;
   const moves: Move[] = [];
@@ -1193,10 +1141,7 @@ export function dfaToRegex(d: DFA): string {
   return shortestByElimination({ n: min.n, start: min.start, accept: min.accept, moves });
 }
 
-/**
- * A regular expression for the language of an NFA by state elimination on the automaton as it is,
- * ε-moves included, so the result follows its structure. Exact, like dfaToRegex.
- */
+/** A regex for L(nfa), by state elimination on the automaton as written, so it follows its structure. */
 export function nfaToRegex(nfa: NFA): string {
   const moves: Move[] = [];
   for (let s = 0; s < nfa.n; s++) {
@@ -1206,11 +1151,11 @@ export function nfaToRegex(nfa: NFA): string {
   return shortestByElimination({ n: nfa.n, start: nfa.start, accept: Array.from({ length: nfa.n }, (_, s) => nfa.accept.has(s)), moves });
 }
 
-/** A move labelled by a regular expression, in a generalized automaton. */
+/** A generalized automaton: moves are labelled by regexes. */
 interface Move { from: number; to: number; rx: Rx }
 interface Generalized { n: number; start: number; accept: boolean[]; moves: Move[] }
 
-/** Tries the greedy elimination order and a few seeded variations of it, and keeps the shortest expression. */
+/** The shortest result of the greedy elimination order and a few jittered variations of it. */
 function shortestByElimination(g: Generalized): string {
   let best = eliminate(g, 0);
   const tries = g.n <= 12 ? 24 : 6;
@@ -1221,10 +1166,7 @@ function shortestByElimination(g: Generalized): string {
   return best;
 }
 
-/**
- * State elimination on a generalized automaton whose edges carry regular expressions.
- * Seed 0 removes the state that creates the least text; other seeds jitter that cost to explore other orders.
- */
+/** State elimination. Seed 0 removes whichever state adds the least text; other seeds jitter that cost. */
 function eliminate(g: Generalized, seed: number): string {
   let rnd = seed * 2654435761 % 4294967296;
   const jitter = () => { rnd = (rnd * 1103515245 + 12345) % 2147483648; return 1 + (rnd / 2147483648) * 0.9; };
@@ -1245,7 +1187,7 @@ function eliminate(g: Generalized, seed: number): string {
   const live = fromStart.map((r, s) => r && toAccept[s]);
   if (!live[g.start]) return "∅";
 
-  // generalized automaton: states 0..n-1, plus S = n (new start) and F = n + 1 (new accept)
+  // states 0..n-1, plus S = n (new start) and F = n + 1 (new accept)
   const n = g.n, S = n, F = n + 1;
   const R: Rx[][] = Array.from({ length: n + 2 }, () => Array.from({ length: n + 2 }, () => EMPTY));
   const add = (i: number, j: number, r: Rx) => { R[i][j] = rxOr([R[i][j], r]); };
@@ -1257,7 +1199,6 @@ function eliminate(g: Generalized, seed: number): string {
   for (let s = 0; s < n; s++) if (live[s]) remaining.add(s);
   const nodes = () => [S, ...remaining, F];
   while (remaining.size) {
-    // eliminate the state whose removal creates the least text
     let best = -1, bestCost = Infinity;
     for (const k of remaining) {
       const ins = nodes().filter((i) => i !== k && R[i][k].t !== "empty");
