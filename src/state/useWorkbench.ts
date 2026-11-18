@@ -6,7 +6,7 @@
 import { useMemo, useReducer } from "react";
 import {
   readLanguage, readAnswer, checkAnswer, probe, samples, hints, toInputError,
-  type Language, type LanguageSource, type AnswerSource, type Answer, type Feedback, type InputError, type Hints, type Probe,
+  type Language, type AnswerSource, type Answer, type Feedback, type InputError, type Hints, type Probe,
 } from "../engine/index.ts";
 import { EXAMPLES } from "./examples.ts";
 
@@ -17,8 +17,7 @@ export interface WorkbenchState {
   /** the example to return to when switching back from "Your own" */
   lastExample: number;
   alphabet: string;
-  source: LanguageSource;
-  /** the description or reference regex as typed */
+  /** the description as typed */
   language: string;
   answerSource: AnswerSource;
   /** both answer drafts are kept, so switching between them loses nothing */
@@ -42,7 +41,6 @@ export type Action =
   | { type: "mode"; value: "examples" | "own" }
   | { type: "blank" }
   | { type: "alphabet" | "language" | "regex" | "automaton" | "probe"; value: string }
-  | { type: "source"; value: LanguageSource }
   | { type: "answerSource"; value: AnswerSource }
   | { type: "check" }
   | { type: "hint"; level: 0 | 1 | 2 }
@@ -51,7 +49,7 @@ export type Action =
 
 const first = EXAMPLES[0];
 export const initialState: WorkbenchState = {
-  example: 0, lastExample: 0, alphabet: first.alphabet, source: first.source, language: first.text,
+  example: 0, lastExample: 0, alphabet: first.alphabet, language: first.text,
   answerSource: "regex", regex: "", automaton: "", probe: "",
   checked: null, hintLevel: 0, solutionShown: false, step: null,
 };
@@ -63,17 +61,16 @@ function reducer(s: WorkbenchState, a: Action): WorkbenchState {
   switch (a.type) {
     case "example": {
       const ex = EXAMPLES[a.value];
-      return languageChanged({ ...s, example: a.value, lastExample: a.value, alphabet: ex.alphabet, source: ex.source, language: ex.text });
+      return languageChanged({ ...s, example: a.value, lastExample: a.value, alphabet: ex.alphabet, language: ex.text });
     }
     case "mode": {
       // "Your own" starts from the current language, so the current check still applies
       if (a.value === "own") return { ...s, example: "own" };
       return reducer(s, { type: "example", value: s.lastExample });
     }
-    case "blank": return languageChanged({ ...s, example: "own", source: "spec", language: "" });
+    case "blank": return languageChanged({ ...s, example: "own", language: "" });
     case "alphabet": return languageChanged({ ...s, example: "own", alphabet: a.value });
     case "language": return languageChanged({ ...s, example: "own", language: a.value });
-    case "source": return languageChanged({ ...s, example: "own", source: a.value });
     case "regex": return { ...s, regex: a.value };
     case "automaton": return { ...s, automaton: a.value };
     case "answerSource": return { ...s, answerSource: a.value, step: null };
@@ -111,9 +108,9 @@ export function useWorkbench() {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   const lang = useMemo(() => {
-    try { return { language: readLanguage(state.alphabet, state.source, state.language), error: null }; }
+    try { return { language: readLanguage(state.alphabet, state.language), error: null }; }
     catch (e) { return { language: null, error: toInputError(e, "language") }; }
-  }, [state.alphabet, state.source, state.language]);
+  }, [state.alphabet, state.language]);
 
   const sampleList = useMemo(() => (lang.language ? samples(lang.language) : null), [lang.language]);
   const hintData = useMemo(() => (lang.language ? hints(lang.language) : null), [lang.language]);

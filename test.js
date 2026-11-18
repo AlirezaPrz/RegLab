@@ -138,7 +138,7 @@ test("errors: descriptions and automata say where", () => {
 
 // ------------------------------------------------- feedback (check.ts)
 
-const lang = (src, mode = "spec", alpha = "a b") => R.readLanguage(alpha, mode, src);
+const lang = (src, alpha = "a b") => R.readLanguage(alpha, src);
 const check = (mode, src, L) => R.checkAnswer(R.readAnswer(mode, src, L.alphabet), L);
 
 test("feedback: verdicts", () => {
@@ -170,7 +170,8 @@ test("feedback: mergeable and unreachable states", () => {
   assert.deepStrictEqual(f.states.unreachable, ["z"]);
 });
 test("feedback: NFA note and probe path", () => {
-  const L = lang("(a+b)*a(a+b)(a+b)", "regex");
+  // descriptions cannot say "third from the end", so this language is built directly
+  const L = { alphabet: ab, dfa: rx("(a+b)*a(a+b)(a+b)"), text: "" };
   const ans = R.readAnswer("automaton", "start: s\naccept: f\ns a,b s\ns a x\nx a,b y\ny a,b f", L.alphabet);
   const f = R.checkAnswer(ans, L);
   assert(f.correct && f.nfa && f.states === null);
@@ -187,7 +188,7 @@ test("feedback: hints match the minimal DFA", () => {
   assert.deepStrictEqual(h.solution.edges.find((e) => e.from === 2 && e.to === 2).symbols, ["a"]);
 });
 test("errors: readLanguage and readAnswer say which field", () => {
-  assert.throws(() => lang("ends in aa", "spec", "a ("), (e) => e.field === "alphabet");
+  assert.throws(() => lang("ends in aa", "a ("), (e) => e.field === "alphabet");
   assert.throws(() => lang("ends in zz"), (e) => e.field === "language");
   assert.throws(() => R.readAnswer("regex", "a+", ab), (e) => e.field === "answer");
 });
@@ -204,9 +205,69 @@ test("solution regex: describes exactly the language", () => {
   const d = spec("sum divisible by 3", ["1", "2"]);
   assert(R.compare(R.regexToDfa(R.dfaToRegex(d), ["1", "2"]), d).correct);
 });
-test("solution regex: hints give the reference regex when there is one", () => {
-  assert.strictEqual(R.hints(R.readLanguage("a b", "regex", "(a + b)*a")).regex, "(a+b)*a");
-  assert.strictEqual(R.hints(R.readLanguage("a b", "spec", "#_a(w) = 1")).regex, "b*ab*");
+test("solution regex: hints carry the regex", () => {
+  assert.strictEqual(R.hints(lang("#_a(w) = 1")).regex, "b*ab*");
+});
+
+// ------------------------------------------------- converters (check.ts)
+
+test("regex to NFA: built by induction, start state 0, same language", () => {
+  const sizes = { "a": 2, "ε": 1, "∅": 1, "a+b": 5, "ab": 4, "a*": 3, "(a+b)*aa": 10, "(a+b)*a(a+b)(a+b)": 18 };
+  for (const [src, n] of Object.entries(sizes)) {
+    const nfa = R.regexToNfa(R.parseRegex(src, ab), ab);
+    assert.strictEqual(nfa.n, n, src);
+    assert.strictEqual(nfa.start, 0, src);
+    assert(same(R.nfaToDfa(nfa), rx(src)), src);
+  }
+});
+test("convertRegex: NFA, subset DFA and smallest DFA", () => {
+  const c = R.convertRegex("a b", "(a+b)*aa");
+  assert.strictEqual(c.nfa.names.length, 10);
+  assert(c.nfa.edges.some((e) => e.symbols.includes("ε")));
+  // the subset DFA names its states by letter, and each stands for a set of NFA states
+  assert.deepStrictEqual(c.dfa.names, ["A", "B", "C", "D"]);
+  assert.strictEqual(c.subsets.length, 4);
+  assert(c.subsets[0].includes("q0"));
+  assert.strictEqual(c.minimal.names.length, 3);
+  assert.deepStrictEqual(c.samples.yes.slice(0, 2), ["aa", "aaa"]);
+  // the empty set is drawn as ∅, a dead state
+  const d = R.convertRegex("a b", "ab");
+  assert(d.dfa.names.includes("∅"));
+  assert.deepStrictEqual(d.subsets[d.dfa.names.indexOf("∅")], []);
+});
+test("convertAutomaton: regex for the language, kind", () => {
+  const nfa = "start: q0\naccept: q2\nq0 a,b q0\nq0 a q1\nq1 b q2";
+  const c = R.convertAutomaton("a b", nfa);
+  assert.strictEqual(c.kind, "nfa");
+  assert.strictEqual(c.minStates, 3);
+  // eliminating from the NFA as written follows its structure
+  assert.strictEqual(c.regex, "(a+b)*ab");
+  assert.strictEqual(c.eliminatedFrom, "automaton");
+  assert.strictEqual(R.convertAutomaton("a b", "start: e\naccept: e\ne a o\no a e\ne b e\no b o").kind, "dfa");
+});
+test("nfaToRegex: exact on NFAs built from random expressions", () => {
+  let seed = 11;
+  const rnd = (n) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+  const gen = (d) => {
+    const k = d <= 0 ? rnd(3) : rnd(8);
+    if (k === 0) return "a"; if (k === 1) return "b"; if (k === 2) return rnd(4) ? "a" : "ε";
+    if (k <= 4) return `(${gen(d - 1)}+${gen(d - 1)})`;
+    if (k <= 6) return `${gen(d - 1)}${gen(d - 1)}`;
+    return `(${gen(d - 1)})*`;
+  };
+  for (let i = 0; i < 300; i++) {
+    const src = gen(3);
+    assert(same(rx(R.nfaToRegex(R.regexToNfa(R.parseRegex(src, ab), ab))), rx(src)), src);
+  }
+});
+test("converters: automatonText round-trips, and errors name the field", () => {
+  for (const src of ["(a+b)*a(a+b)(a+b)", "a*b*", "∅", "ε", "(ab+ba)*"]) {
+    const c = R.convertRegex("a b", src);
+    for (const m of [c.nfa, c.dfa, c.minimal]) assert(same(rx(R.convertAutomaton("a b", R.automatonText(m)).regex), rx(src)), src);
+  }
+  assert.throws(() => R.convertRegex("a b", "a+"), (e) => e.field === "input");
+  assert.throws(() => R.convertRegex("a (", "a"), (e) => e.field === "alphabet");
+  assert.throws(() => R.convertAutomaton("a b", "start: q0\nq0 c q0"), (e) => e.field === "input" && e.line === 2);
 });
 
 console.log(`\n${passed} passed`);

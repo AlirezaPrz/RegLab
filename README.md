@@ -1,6 +1,9 @@
 # RegLab
 
-A self-serve practice tool for regular languages (CSCB36, Introduction to the Theory of Computation). Describe a language, answer with a regular expression, DFA or NFA, and find out whether the answer is right and, if not, exactly where it goes wrong.
+A self-serve practice tool for regular languages (CSCB36, Introduction to the Theory of Computation). It has two tools:
+
+- **Regular Languages:** describe a language, answer with a regular expression, DFA or NFA, and find out whether the answer is right and, if not, exactly where it goes wrong.
+- **Regex ⇄ Automata:** turn a regular expression into an NFA, the DFA the subset construction makes from it, and the smallest DFA; or turn a DFA or NFA into a regular expression.
 
 It is a static site with no backend.
 
@@ -25,18 +28,20 @@ npm run preview    # serve dist/ locally
 ```
 src/
   engine/       all automata logic, no DOM, no dependencies
-    engine.ts     regex/description/automaton parsing, subset construction, minimisation, comparison, DFA to regex
-    check.ts      what the UI shows, as plain data: readLanguage, readAnswer, checkAnswer, probe, hints
+    engine.ts     regex/description/automaton parsing, regex to NFA, subset construction, minimisation,
+                  comparison, state elimination (automaton to regex)
+    check.ts      what the UI shows, as plain data: readLanguage, readAnswer, checkAnswer, probe, hints,
+                  and for the converter convertRegex, convertAutomaton, automatonText
   state/        useWorkbench: the study session (language → answer → feedback → probe)
   features/
     home/       the landing page (#/): what RegLab is, the tools, a scroll walkthrough of the
                 regular-languages tool (HowItWorks), and the BIG RESULT
     check/      the regular-languages tool (#/regular; #/check still works)
+    convert/    the regex ⇄ automata converter (#/convert)
   diagram/      dagre layout (layout.ts) and the SVG / table renderer
-  ui/           small shared pieces: symbol keys, field errors, typeset notation, icons
+  ui/           small shared pieces: symbol keys, the automaton editor, field errors, typeset notation, icons
   styles/       tokens.css (light and dark themes) and app.css
 src/assets/fonts/  a subset of STIX Two Math for operators (SIL OFL 1.1, licence alongside)
-prototype/      the original vanilla-JS prototype and engine, kept for reference
 test.js         engine tests
 ```
 
@@ -48,6 +53,6 @@ Rules worth keeping:
 
 ## Adding the planned features
 
-- **New tools** (NFA-to-DFA step-through, context-free grammars, pushdown automata, pumping-lemma game, practice problems): add a folder under `src/features/`, an entry in `VIEWS` in `src/App.tsx` (its header link, named for what it covers), and an `href` on its tile in `TOOLS` in `src/features/home/HomeView.tsx` so it stops showing "Planned".
+- **New tools** (for example an NFA-to-DFA step-through, context-free grammars, pushdown automata, a pumping-lemma game, practice problems): add a folder under `src/features/`, an entry in `VIEWS` in `src/App.tsx` (its header link, named for what it covers), and a `ToolTile` for it in `src/features/home/HomeView.tsx`.
 - **Diagrams**: `Diagram` (from `src/diagram/LazyDiagram.tsx`) takes an `AutomatonModel` (`names`, `start`, `accept`, `edges`) plus `active` and `marked` state sets, so a step-through can highlight subsets as it goes. The layout library is confined to `src/diagram/layout.ts`.
 - **Drag-and-drop editor**: produce the same `{ start, accept, edges }` shape the text format parses into (`ParsedAutomaton` / `AutomatonModel`) and add it as another answer source next to the text editor in `AnswerPanel`.

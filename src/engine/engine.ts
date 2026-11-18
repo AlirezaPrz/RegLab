@@ -2,7 +2,7 @@
  * The automata engine: everything RegLab knows about regular languages.
  *
  * Every input becomes a total DFA over a fixed alphabet: a regular expression in course
- * notation (Thompson construction, then subset construction), a language description (one DFA
+ * notation (an NFA built by induction on the expression, then subset construction), a language description (one DFA
  * per condition, joined by product construction), or a DFA/NFA written as transitions. DFAs are
  * then minimized (Moore partition refinement), compared, and turned back into explanations.
  *
@@ -342,22 +342,43 @@ export function parseRegex(src: string, alphabet: readonly string[]): RegexAst {
   return ast;
 }
 
-/** Thompson construction: each node becomes an NFA fragment with one entry and one exit state. */
+/**
+ * An NFA for a regular expression, built by induction on its structure:
+ * - a symbol is two states joined by that symbol; ε is one accepting state; ∅ is one rejecting state
+ * - R + S: a new start state with ε-moves to the starts of R and S; both keep their accepting states
+ * - RS: ε-moves from the accepting states of R to the start of S, whose accepting states are kept
+ * - R*: a new accepting start state with an ε-move into R, and ε-moves from R's accepting states back to it
+ * States are numbered as they are created, so the start state is always 0.
+ */
 export function regexToNfa(ast: RegexAst, alphabet: readonly string[]): NFA {
   const nfa = newNfa(alphabet);
-  function build(node: RegexAst): [number, number] {
-    const i = nfa.add(), f = nfa.add();
-    if (node.t === "eps") nfa.edge(i, EPS, f);
-    else if (node.t === "sym") nfa.edge(i, node.c, f);
-    else if (node.t === "union") for (const part of [build(node.a), build(node.b)]) { nfa.edge(i, EPS, part[0]); nfa.edge(part[1], EPS, f); }
-    else if (node.t === "concat") { const a = build(node.a), b = build(node.b); nfa.edge(i, EPS, a[0]); nfa.edge(a[1], EPS, b[0]); nfa.edge(b[1], EPS, f); }
-    else if (node.t === "star") { const a = build(node.a); nfa.edge(i, EPS, f); nfa.edge(i, EPS, a[0]); nfa.edge(a[1], EPS, a[0]); nfa.edge(a[1], EPS, f); }
-    // ∅ gets no edges, so its exit is unreachable
-    return [i, f];
+  function build(node: RegexAst): { start: number; accept: number[] } {
+    switch (node.t) {
+      case "eps": { const s = nfa.add(); return { start: s, accept: [s] }; }
+      case "empty": return { start: nfa.add(), accept: [] };
+      case "sym": { const s = nfa.add(), f = nfa.add(); nfa.edge(s, node.c, f); return { start: s, accept: [f] }; }
+      case "union": {
+        const s = nfa.add(), a = build(node.a), b = build(node.b);
+        nfa.edge(s, EPS, a.start);
+        nfa.edge(s, EPS, b.start);
+        return { start: s, accept: [...a.accept, ...b.accept] };
+      }
+      case "concat": {
+        const a = build(node.a), b = build(node.b);
+        for (const f of a.accept) nfa.edge(f, EPS, b.start);
+        return { start: a.start, accept: b.accept };
+      }
+      case "star": {
+        const s = nfa.add(), a = build(node.a);
+        nfa.edge(s, EPS, a.start);
+        for (const f of a.accept) nfa.edge(f, EPS, s);
+        return { start: s, accept: [s] };
+      }
+    }
   }
-  const [i, f] = build(ast);
-  nfa.start = i;
-  nfa.accept.add(f);
+  const { start, accept } = build(ast);
+  nfa.start = start;
+  for (const f of accept) nfa.accept.add(f);
   return nfa;
 }
 
@@ -803,11 +824,35 @@ function rxStar(a: Rx): Rx {
  * only shorten it.
  */
 export function dfaToRegex(d: DFA): string {
-  // try the greedy order and a few seeded variations of it; keep the shortest expression
-  let best = eliminate(d, 0);
-  const tries = minimize(d).dfa.n <= 12 ? 24 : 6;
+  const min = minimize(d).dfa;
+  const moves: Move[] = [];
+  min.delta.forEach((row, s) => row.forEach((t, c) => moves.push({ from: s, to: t, rx: { t: "sym", c: min.alphabet[c] } })));
+  return shortestByElimination({ n: min.n, start: min.start, accept: min.accept, moves });
+}
+
+/**
+ * A regular expression for the language of an NFA by state elimination on the automaton as it is,
+ * ε-moves included, so the result follows its structure. Exact, like dfaToRegex.
+ */
+export function nfaToRegex(nfa: NFA): string {
+  const moves: Move[] = [];
+  for (let s = 0; s < nfa.n; s++) {
+    for (const [c, targets] of nfa.trans[s]) for (const t of targets) moves.push({ from: s, to: t, rx: { t: "sym", c } });
+    for (const t of nfa.eps[s]) moves.push({ from: s, to: t, rx: EPSILON });
+  }
+  return shortestByElimination({ n: nfa.n, start: nfa.start, accept: Array.from({ length: nfa.n }, (_, s) => nfa.accept.has(s)), moves });
+}
+
+/** A move labelled by a regular expression, in a generalized automaton. */
+interface Move { from: number; to: number; rx: Rx }
+interface Generalized { n: number; start: number; accept: boolean[]; moves: Move[] }
+
+/** Tries the greedy elimination order and a few seeded variations of it, and keeps the shortest expression. */
+function shortestByElimination(g: Generalized): string {
+  let best = eliminate(g, 0);
+  const tries = g.n <= 12 ? 24 : 6;
   for (let seed = 1; seed <= tries; seed++) {
-    const r = eliminate(d, seed);
+    const r = eliminate(g, seed);
     if (r.length < best.length) best = r;
   }
   return best;
@@ -817,23 +862,33 @@ export function dfaToRegex(d: DFA): string {
  * State elimination on a generalized automaton whose edges carry regular expressions.
  * Seed 0 removes the state that creates the least text; other seeds jitter that cost to explore other orders.
  */
-function eliminate(d: DFA, seed: number): string {
+function eliminate(g: Generalized, seed: number): string {
   let rnd = seed * 2654435761 % 4294967296;
   const jitter = () => { rnd = (rnd * 1103515245 + 12345) % 2147483648; return 1 + (rnd / 2147483648) * 0.9; };
-  const min = minimize(d).dfa;
-  const live = canReach(min, true); // the other states are dead
-  if (!live[min.start]) return "∅";
+  // only states on some path from the start to an accepting state matter
+  const reach = (from: boolean[], forward: boolean) => {
+    const out = [...from];
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const m of g.moves) {
+        const [a, b] = forward ? [m.from, m.to] : [m.to, m.from];
+        if (out[a] && !out[b]) { out[b] = true; changed = true; }
+      }
+    }
+    return out;
+  };
+  const fromStart = reach(g.accept.map((_, s) => s === g.start), true);
+  const toAccept = reach(g.accept, false);
+  const live = fromStart.map((r, s) => r && toAccept[s]);
+  if (!live[g.start]) return "∅";
 
   // generalized automaton: states 0..n-1, plus S = n (new start) and F = n + 1 (new accept)
-  const n = min.n, S = n, F = n + 1;
+  const n = g.n, S = n, F = n + 1;
   const R: Rx[][] = Array.from({ length: n + 2 }, () => Array.from({ length: n + 2 }, () => EMPTY));
   const add = (i: number, j: number, r: Rx) => { R[i][j] = rxOr([R[i][j], r]); };
-  add(S, min.start, EPSILON);
-  for (let s = 0; s < n; s++) {
-    if (!live[s]) continue;
-    if (min.accept[s]) add(s, F, EPSILON);
-    min.alphabet.forEach((c, ci) => { const t = min.delta[s][ci]; if (live[t]) add(s, t, { t: "sym", c }); });
-  }
+  add(S, g.start, EPSILON);
+  for (let s = 0; s < n; s++) if (live[s] && g.accept[s]) add(s, F, EPSILON);
+  for (const m of g.moves) if (live[m.from] && live[m.to]) add(m.from, m.to, m.rx);
 
   const remaining = new Set<number>();
   for (let s = 0; s < n; s++) if (live[s]) remaining.add(s);
