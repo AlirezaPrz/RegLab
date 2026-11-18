@@ -2,8 +2,8 @@
 
 A self-serve practice tool for regular languages (CSCB36, Introduction to the Theory of Computation). It has two tools:
 
-- **Regular languages:** describe a language, answer with a regular expression, DFA or NFA, and find out whether the answer is right and, if not, exactly where it goes wrong.
-- **Regex ⇄ automata:** turn a regular expression into an NFA, the DFA the subset construction makes from it, and the smallest DFA; or turn a DFA or NFA into a regular expression.
+- **Regular Languages:** describe a language, answer with a regular expression, DFA or NFA, and find out whether the answer is right and, if not, exactly where it goes wrong.
+- **Regex ⇄ Automata:** turn a regular expression into an NFA, the DFA the subset construction makes from it, and the smallest DFA; or turn a DFA or NFA into a regular expression.
 
 It is a static site with no backend.
 

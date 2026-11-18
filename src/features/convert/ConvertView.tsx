@@ -28,7 +28,7 @@ export function ConvertView() {
     <div className="lang-head">
       <h2 id={headingId} className="h-section">Convert</h2>
       <Segmented labelledBy={headingId} value={dir} onChange={setDir}
-        options={[{ value: "to-automata", label: "Regex → automata" }, { value: "to-regex", label: "Automaton → regex" }]} />
+        options={[{ value: "to-automata", label: "Regex → Automata" }, { value: "to-regex", label: "Automaton → Regex" }]} />
     </div>
   );
 

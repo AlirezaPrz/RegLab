@@ -12,8 +12,8 @@ import { Icon } from "./ui/Icon.tsx";
  */
 const VIEWS: { id: string; nav: string; title: string; Component: ComponentType; ownHeading?: boolean; aliases?: string[] }[] = [
   { id: "", nav: "About", title: "A workbench for the theory of computation", Component: HomeView, ownHeading: true },
-  { id: "regular", nav: "Regular languages", title: "Regular languages: check an answer", Component: CheckView, aliases: ["check"] },
-  { id: "convert", nav: "Regex ⇄ automata", title: "Regex ⇄ automata: convert between regular expressions and automata", Component: ConvertView },
+  { id: "regular", nav: "Regular Languages", title: "Regular Languages: check an answer", Component: CheckView, aliases: ["check"] },
+  { id: "convert", nav: "Regex ⇄ Automata", title: "Regex ⇄ Automata: convert between regular expressions and automata", Component: ConvertView },
 ];
 
 const hrefOf = (id: string) => (id ? `#/${id}` : "#/");

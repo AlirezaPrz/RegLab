@@ -44,17 +44,17 @@ export function HomeView() {
           Write an answer and RegLab tells you whether it is right. When it is not, you get the exact string where it breaks
           and why. No account and no setup.
         </p>
-        <a className="home-cta" href="#/regular">Open regular languages</a>
+        <a className="home-cta" href="#/regular">Open Regular Languages</a>
       </section>
 
       <section className="home-tools" aria-labelledby="tools-h">
         <h2 id="tools-h" className="home-h2">Tools</h2>
         <ul className="tools">
-          <ToolTile name="Regular languages" href="#/regular"
+          <ToolTile name="Regular Languages" href="#/regular"
             what="Describe a language and answer with a regular expression, DFA or NFA. See the shortest string your answer gets wrong, which strings it confuses, and hints that stop short of the answer."
             formula={<Definition alphabet={["a", "b"]} text="ends in aa" />}
             model={dfa} title="Example: the smallest DFA for strings ending in aa" />
-          <ToolTile name="Regex ⇄ automata" href="#/convert"
+          <ToolTile name="Regex ⇄ Automata" href="#/convert"
             what="Turn a regular expression into an NFA, the DFA the subset construction makes from it, and the smallest DFA. Or turn a DFA or NFA into a regular expression."
             formula={<span className="math"><i>R</i> <span className="m-op">=</span> <TypesetRegex text="(a+b)*ab" /></span>}
             model={nfa} title="Example: an NFA for (a+b)*ab" />
@@ -76,7 +76,7 @@ export function HomeView() {
           </div>
           <p className="result-note">
             Both tools are built on it. The regular-languages tool turns every answer into a DFA, so any two answers can be
-            compared exactly. <a href="#/convert">Regex ⇄ automata</a> runs the constructions from its proof: regex to NFA, NFA to DFA,
+            compared exactly. <a href="#/convert">Regex ⇄ Automata</a> runs the constructions from its proof: regex to NFA, NFA to DFA,
             and back to a regex.
           </p>
         </div>

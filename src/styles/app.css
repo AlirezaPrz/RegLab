@@ -293,8 +293,8 @@ a.btn-quiet { text-decoration: none; display: inline-block; }
   /* two rows: the name and theme on top, the pages below (scrolling sideways only on the narrowest phones) */
   .topbar-inner { flex-wrap: wrap; row-gap: 0; padding: 6px 12px 2px 16px; gap: var(--space-3); }
   .theme-toggle { order: 2; }
-  .topnav { order: 3; flex: 1 0 100%; margin-left: calc(-1 * var(--space-2)); overflow-x: auto; scrollbar-width: none; }
-  .topnav a { padding: 0 var(--space-2); }
+  .topnav { order: 3; flex: 1 0 100%; margin-left: -6px; overflow-x: auto; scrollbar-width: none; }
+  .topnav a { padding: 0 6px; }
   .wordmark { font-size: var(--step-1); }
   .row .field, .row .field-narrow { flex: 1 1 100%; }
   .row .field-narrow input { max-width: 160px; }
